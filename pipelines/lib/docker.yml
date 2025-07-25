@@ -61,7 +61,7 @@ steps:
       tags: |
         ${{ coalesce(image.tag, parameters.defaultImageTag) }}
     env:
-      DOCKER_BUILDKIT: 1  # Workaround for https://github.com/microsoft/azure-pipelines-tasks/issues/17893
+      DOCKER_BUILDKIT: 1  # Enables BuildKit to resolve build performance and compatibility issues. See https://github.com/microsoft/azure-pipelines-tasks/issues/17893 for details.
 
   - task: Docker@2
     displayName: ${{ format('Push Docker Image ({0})', image.name) }}
