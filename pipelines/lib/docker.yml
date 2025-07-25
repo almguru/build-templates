@@ -1,0 +1,70 @@
+# Copyright (c) 2023 Vladimir Gusarov. All rights reserved.
+# Licensed under the MIT License.
+#
+# Template: Docker Build Pipeline
+# Description: Builds and pushes Docker images to a container registry.
+# This template validates required parameters, builds Docker images with optional
+# build arguments, and pushes them to the specified container registry.
+# Supports multiple images with individual configuration and default tagging.
+
+parameters:
+# Collection of objects that describe Docker images to build and push
+# Each object should contain:
+# - name: Name of the Docker image
+# - dockerFile: Path to the Dockerfile
+# - buildContext: Path to the build context (directory containing the Dockerfile and other files)
+# - repositoryName: Name of the repository within the container registry (e.g., 'product/component')
+# - buildArguments: Optional build arguments for the Docker build command
+# - tag: Optional tag for the Docker image (default is '$(GitVersion.SemVer)')
+# Example:
+# images:
+# - name: 'crawler'
+#   dockerFile: './src/crawler/Dockerfile'
+#   buildContext: './src/crawler/binaries'
+#   repositoryName: 'product/component'
+- name: images
+  type: object
+
+# Container registry service connection to use for building and pushing Docker images
+- name: containerRegistry
+  type: string
+
+# Default tag for Docker images if not specified in the image object
+# This can be overridden by specifying a 'tag' in the image object
+# Default is '$(GitVersion.SemVer)' which uses the semantic versioning from GitVersion
+- name: defaultImageTag
+  type: string
+  default: '$(GitVersion.SemVer)'
+
+steps:
+- ${{ each image in parameters.images }}:
+  - ${{ if not(and(image.dockerFile, image.buildContext, image.repositoryName)) }}:
+    - script: |
+        echo "##vso[task.logissue type=error;]Missing one of the following parameters: 'dockerFile', 'buildContext', 'repositoryName' for Docker image '${{ image.name }}'"
+        echo "##vso[task.complete result=Failed;]"
+      displayName: ${{ format('Validate Docker Image parameters ({0})', image.name) }}
+
+  - task: Docker@2
+    displayName: ${{ format('Build Docker Image ({0})', image.name) }}
+    inputs:
+      command: build
+      ${{ if image.buildArguments }}:
+        arguments: ${{ image.buildArguments }}
+      dockerfile: ${{ image.dockerFile }}
+      buildContext: ${{ image.buildContext }}
+      containerRegistry: ${{ parameters.containerRegistry }}
+      repository: ${{ lower(format('{0}/{1}', image.repositoryName, image.name)) }}
+      tags: |
+        ${{ coalesce(image.tag, parameters.defaultImageTag) }}
+    env:
+      DOCKER_BUILDKIT: 1  # Workaround for https://github.com/microsoft/azure-pipelines-tasks/issues/17893
+
+  - task: Docker@2
+    displayName: ${{ format('Push Docker Image ({0})', image.name) }}
+    inputs:
+      command: push
+      dockerfile: ${{ image.dockerFile }}
+      containerRegistry: ${{ parameters.containerRegistry }}
+      repository: ${{ lower(format('{0}/{1}', image.repositoryName, image.name)) }}
+      tags: |
+        ${{ coalesce(image.tag, parameters.defaultImageTag) }}
