@@ -292,7 +292,7 @@ steps:
 
         # Execute deployment and capture output
         Write-Host "##[command]$($deploymentCmd -join ' ')"
-        $deploymentOutput = & $deploymentCmd[0] $deploymentCmd[1..($deploymentCmd.Length-1)]
+        $deploymentOutput = & $deploymentCmd[0] $deploymentCmd[1..-1]
 
         if ($LASTEXITCODE -ne 0) {
             throw "Deployment failed with exit code $LASTEXITCODE"
