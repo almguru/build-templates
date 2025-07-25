@@ -40,7 +40,11 @@ steps:
 - ${{ each image in parameters.images }}:
   - ${{ if not(and(image.dockerFile, image.buildContext, image.repositoryName)) }}:
     - script: |
-        echo "##vso[task.logissue type=error;]Missing one of the following parameters: 'dockerFile', 'buildContext', 'repositoryName' for Docker image '${{ image.name }}'"
+        missingParams=""
+        if [ -z "${{ image.dockerFile }}" ]; then missingParams="${missingParams}dockerFile "; fi
+        if [ -z "${{ image.buildContext }}" ]; then missingParams="${missingParams}buildContext "; fi
+        if [ -z "${{ image.repositoryName }}" ]; then missingParams="${missingParams}repositoryName "; fi
+        echo "##vso[task.logissue type=error;]Missing the following parameter(s): ${missingParams}for Docker image '${{ image.name }}'"
         echo "##vso[task.complete result=Failed;]"
       displayName: ${{ format('Validate Docker Image parameters ({0})', image.name) }}
 
