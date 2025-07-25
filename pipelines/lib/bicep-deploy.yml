@@ -3,7 +3,7 @@
 
 # Bicep Deployment Template
 # This template provides a reusable pipeline for deploying Azure Bicep templates across different scopes
-# (Subscription, Resource Group, Management Group, or Tenant). It supports parameter overrides,
+# (Subscription, Resource Group, Management Group, or Tenant). It supports parameter overrides, allowing users to specify or override deployment parameters dynamically during pipeline execution.
 # Bicep Deployment Pipeline Template
 #
 # Description:
