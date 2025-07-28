@@ -1,4 +1,4 @@
-# build-templates
+# Azure DevOps Build Teamplates
 
 Collection of useful templates for Azure DevOps YAML pipelines. This repository provides reusable pipeline templates that standardize common build and deployment tasks in Azure DevOps.
 
