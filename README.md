@@ -224,7 +224,7 @@ resources:
   - repository: templates
     type: github
     name: almguru/build-templates
-    endpoint: MyGitHubServiceConnection 
+    endpoint: MyGitHubServiceConnection
     ref: main
 
 stages:
