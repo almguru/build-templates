@@ -135,8 +135,9 @@ Template for building and pushing Docker images to container registries with sup
 resources:
   repositories:
   - repository: templates
-    type: git
+    type: github
     name: almguru/build-templates
+    endpoint: MyGitHubServiceConnection 
     ref: main
 
 stages:
@@ -163,8 +164,9 @@ stages:
 resources:
   repositories:
   - repository: templates
-    type: git
+    type: github
     name: almguru/build-templates
+    endpoint: MyGitHubServiceConnection 
     ref: main
 
 stages:
@@ -220,8 +222,9 @@ stages:
 resources:
   repositories:
   - repository: templates
-    type: git
+    type: github
     name: almguru/build-templates
+    endpoint: MyGitHubServiceConnection 
     ref: main
 
 stages:
@@ -256,8 +259,9 @@ trigger:
 resources:
   repositories:
   - repository: templates
-    type: git
+    type: github
     name: almguru/build-templates
+    endpoint: MyGitHubServiceConnection 
     ref: main
 
 variables:
