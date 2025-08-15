@@ -1,40 +1,60 @@
 # Copyright (c) 2025 Vladimir Gusarov. All rights reserved.
 # Licensed under the MIT License.
 
-# Bicep Deployment Pipeline Template
+# Bicep Deployment Template
 # This template provides a reusable pipeline for deploying Azure Bicep templates across different scopes
-# (Subscription, Resource Group, Management Group, or Tenant). It supports parameter overrides, allowing users to specify or override deployment parameters dynamically during pipeline execution.
+# (Subscription, Resource Group, Management Group, or Tenant). It supports parameter overrides,
+# Bicep Deployment Pipeline Template
 #
 # Description:
-#   This pipeline template handles Bicep deployment operations and produces pipeline variables for Bicep deployment output, similar to how the AzureResourceGroupDeployment@2 Azure Pipelines task generates output variables. It processes JSON parameters with proper escaping to ensure special characters and expressions are handled correctly during deployment.
+#   This pipeline template handles Bicep deployment operations and produces
+#   pipeline variables for Bicep deployment output, similar to how the
+#   AzureResourceGroupDeployment@2 Azure Pipelines task generates output variables.
+#   It processes JSON parameters with proper backtick or backslash double quotes escaping to ensure
+#   special characters and expressions are handled correctly during deployment.
 #
 # Usage:
-#   Include this template in your pipeline to deploy Bicep templates and automatically generate pipeline variables from the deployment outputs.
+#   Include this template in your pipeline to deploy Bicep templates and
+#   automatically generate pipeline variables from the deployment outputs.
+#
+# Bicep Deployment Pipeline Template
+#
+# This template deploys Azure resources using Bicep templates and automatically converts
+# Bicep deployment outputs to Azure DevOps pipeline variables following a specific naming convention.
 #
 # Variable Naming Convention:
-# - All Bicep output variables are prefixed with the deploymentOutputs parameter value (default: "Bicep").
-# - Format: {deploymentOutputs}.{outputName}.name and {deploymentOutputs}.{outputName}.value.
-# - Example: If deploymentOutputs is "Bicep" and Bicep output is "storageAccountName", the resulting pipeline variables will be "Bicep.storageAccountName.name" and "Bicep.storageAccountName.value".
-# - All outputs are also available in a single variable named with the deploymentOutputs parameter value as a JSON-formatted string.
+# - All Bicep output variables are prefixed with the deploymentOutputs parameter value (default: "Bicep")
+# - Format: {deploymentOutputs}.{outputName}.name and {deploymentOutputs}.{outputName}.value
+# - Example: If deploymentOutputs is "Bicep" and Bicep output is "storageAccountName",
+#   the resulting pipeline variables will be "Bicep.storageAccountName.name" and "Bicep.storageAccountName.value"
+# - All outputs are also available in a single variable named with the deploymentOutputs parameter value as JSON formatted string
 #
 # Output Variable Generation:
-# - After successful Bicep deployment, the template automatically extracts all outputs.
-# - Each output is converted to structured pipeline variables using the naming convention above.
-# - A consolidated JSON variable containing all outputs is also created with the deploymentOutputs parameter name.
-# - Variables are made available for subsequent pipeline stages/jobs.
-# - Output values maintain their original data types (string, array, object, etc.).
+# - After successful Bicep deployment, the template automatically extracts all outputs
+# - Each output is converted to structured pipeline variables using the naming convention above
+# - A consolidated JSON variable containing all outputs is also created with the deploymentOutputs parameter name
+# - Variables are made available for subsequent pipeline stages/jobs
+# - Output values maintain their original data types (string, array, object, etc.)
 #
 # Parameters:
-#   - JSON parameters support proper escaping for special characters.
+#   - JSON parameters support backtick or backslash double quotes escaping for special characters
 #
 # Outputs:
-#   - Pipeline variables corresponding to Bicep deployment outputs.
-#   - Compatible with AzureResourceGroupDeployment@2 task output format.
-#   - Example parameter usage:
-#     overrideParameters: 'environmentName=production resourceGroupName=myRG'
-#     overrideParameters: 'config="{\"database\":{\"name\":\"db\",\"tier\":\"premium\"}}"'
-#     overrideParameters: 'settings={`"logging`":{`"level`":`"info`",`"enabled`":true}}'
-#     overrideParameters: 'env=prod tags="{\"project\":\"app\",\"team\":\"engineering\"}" debug=false'
+#   - Pipeline variables corresponding to Bicep deployment outputs
+#   - Compatible with AzureResourceGroupDeployment@2 task output format
+#   
+#   # Multiple parameters
+#   overrideParameters: 'environmentName=production resourceGroupName=myRG'
+#   
+#   # JSON parameter with escaped double quotes
+#   overrideParameters: 'config="{\"database\":{\"name\":\"db\",\"tier\":\"premium\"}}"'
+#   
+#   # JSON parameter with backtick escaping
+#   overrideParameters: 'settings={`"logging`":{`"level`":`"info`",`"enabled`":true}}'
+#   
+#   # Mixed parameter types
+#   overrideParameters: 'env=prod tags="{\"project\":\"app\",\"team\":\"engineering\"}" debug=false'
+# handles JSON parameter parsing, and creates output variables for use in subsequent pipeline steps.
 
 parameters:
 # Name of the Azure RM service connection to use for the deployment
@@ -272,7 +292,7 @@ steps:
 
         # Execute deployment and capture output
         Write-Host "##[command]$($deploymentCmd -join ' ')"
-        $deploymentOutput = & $deploymentCmd[0] $deploymentCmd[1..-1]
+        $deploymentOutput = & $deploymentCmd[0] $deploymentCmd[1..($deploymentCmd.Length-1)]
 
         if ($LASTEXITCODE -ne 0) {
             throw "Deployment failed with exit code $LASTEXITCODE"
