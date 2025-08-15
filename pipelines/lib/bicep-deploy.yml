@@ -24,7 +24,7 @@
 #   - Example: Bicep output "storageAccountName" creates variables:
 #     * Bicep.storageAccountName.name = "storageAccountName"
 #     * Bicep.storageAccountName.value = "mystorageaccount123"
-#     * Bicep = '{"storageAccountName":{"value":"mystorageaccount123"}}'
+#     * Bicep = '{\"storageAccountName\":{\"value\":\"mystorageaccount123\"}}'
 #
 # Parameter Examples:
 #   # Simple parameters
