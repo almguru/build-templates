@@ -2,6 +2,14 @@
 
 Collection of useful templates for Azure DevOps YAML pipelines. This repository provides reusable pipeline templates that standardize common build and deployment tasks in Azure DevOps.
 
+| Description | Status |
+|-------------|--------|
+| Quality Gate | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
+| Bugs | [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=bugs)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
+| Code Smells | [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
+| Maintainability Rating | [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
+| Security Rating | [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
+
 ## Table of Contents
 
 - [Overview](#overview)
