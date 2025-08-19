@@ -1,10 +1,20 @@
 {
     "cSpell.words": [
+        "almguru",
         "BUILDKIT",
+        "eastus",
         "endgroup",
         "LASTEXITCODE",
         "logissue",
+        "myapp",
+        "myproduct",
         "mystorageaccount",
-        "notmatch"
+        "notmatch",
+        "nunit",
+        "pscore",
+        "pwsh",
+        "setvariable",
+        "vstest",
+        "xunit"
     ]
 }
