@@ -1,0 +1,26 @@
+# Copyright (c) 2025 Vladimir Gusarov
+# Licensed under the MIT License.
+#
+# Downloads all resource template files from repository.
+#
+# This template ensures that all necessary files are available for the pipeline and checked out from the source control.
+#
+parameters:
+  # The name of the repository resource to be checked out. Use `self` for the current repository.
+  - name: repositoryResourceName
+    type: string
+    default: 'almguru-templates'
+
+  - name: repositoryLocalPath
+    type: string
+    default: 'almguru-templates'
+
+steps:
+  - checkout: ${{ parameters.repositoryResourceName }}
+    path: ${{ parameters.repositoryLocalPath }}
+    displayName: 'Checkout template resources'
+
+  - bash: |
+      #!/bin/bash
+      echo "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)/${{ parameters.repositoryLocalPath }}"
+    displayName: 'Set template resources path variable'

@@ -108,7 +108,7 @@ if (![string]::IsNullOrWhiteSpace($AdditionalArguments)) {
 $searchPattern = $FilePattern -replace '\*\*/', '*' -replace '/', '\'
 
 Write-Host "Searching for files matching: $searchPattern in $SearchPath"
-$files = Get-ChildItem -Path $SearchPath -Filter $searchPattern -Recurse -File
+$files = Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like $searchPattern }
 
 if ($files.Count -eq 0) {
     Write-Warning "No files found matching pattern: $FilePattern"
@@ -128,7 +128,7 @@ foreach ($file in $files) {
 # Set overall exit code based on any failures
 $overallExitCode = ($allExitCodes | Where-Object { $_ -ne 0 }) | Select-Object -First 1
 
-if ($overallExitCode) {
+if ($null -ne $overallExitCode) {
     Write-Host "##vso[task.logissue type=warning]One or more test assemblies failed"
     exit $overallExitCode
 }
