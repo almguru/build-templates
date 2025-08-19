@@ -61,171 +61,175 @@
 #         displayName: 'Database Cleanup'
 
 parameters:
-# Name of the Azure service connection for Key Vault access
-- name: azureSubscription
-  type: string
-  default: ""
+  # Name of the Azure service connection for Key Vault access
+  - name: azureSubscription
+    type: string
+    default: ''
 
-# Target environment name (e.g., Development, Staging, Production)
-- name: environmentName
-  type: string
+  # Target environment name (e.g., Development, Staging, Production)
+  - name: environmentName
+    type: string
 
-# Azure Key Vault name for retrieving secrets and configuration
-- name: keyVaultName
-  type: string
-  default: ""
+  # Azure Key Vault name for retrieving secrets and configuration
+  - name: keyVaultName
+    type: string
+    default: ''
 
-# Filter pattern for Key Vault secrets to retrieve (e.g., 'ConnectionString*')
-- name: keyVaultValuesFilter
-  type: string
-  default: "*"
+  # Filter pattern for Key Vault secrets to retrieve (e.g., 'ConnectionString*')
+  - name: keyVaultValuesFilter
+    type: string
+    default: '*'
 
-# Custom steps to execute before running tests (e.g., setup, data preparation)
-- name: beforeTestsSteps
-  type: stepList
-  default: []
+  # Custom steps to execute before running tests (e.g., setup, data preparation)
+  - name: beforeTestsSteps
+    type: stepList
+    default: []
 
-# Custom steps to execute after running tests (e.g., cleanup, reporting)
-- name: afterTestsSteps
-  type: stepList
-  default: []
+  # Custom steps to execute after running tests (e.g., cleanup, reporting)
+  - name: afterTestsSteps
+    type: stepList
+    default: []
 
-# Descriptive name for the test suite (appears in test results)
-- name: suiteName
-  type: string
-  default: ""
+  # Descriptive name for the test suite (appears in test results)
+  - name: suiteName
+    type: string
+    default: ''
 
-# Runtime environment for executing tests
-- name: runtimeType
-  type: string
-  default: 'none'
-  values:
-    - 'none'
-    - 'dotnet'
+  # Runtime environment for executing tests
+  - name: runtimeType
+    type: string
+    default: 'none'
+    values:
+      - 'none'
+      - 'dotnet'
 
-# .NET version to use for running tests (e.g., '8.x', '9.x')
-- name: runtimeVersion
-  type: string
-  default: ''
+  # .NET version to use for running tests (e.g., '8.x', '9.x')
+  - name: runtimeVersion
+    type: string
+    default: ''
 
-# Name of the pipeline artifact containing test assemblies
-- name: artifactName
-  type: string
-  default: 'deploy'
+  # Name of the pipeline artifact containing test assemblies
+  - name: artifactName
+    type: string
+    default: 'deploy'
 
-# Glob pattern to locate test assemblies (e.g., '**/*AcceptanceTests.dll')
-- name: files
-  type: string
-  default: '**/*Tests.dll'
+  # Glob pattern to locate test assemblies (e.g., '**/*AcceptanceTests.dll')
+  - name: files
+    type: string
+    default: '**/*Tests.dll'
 
-# Additional arguments to pass to the test runner (e.g., '--filter Category=Smoke')
-- name: arguments
-  type: string
-  default: ''
+  # Additional arguments to pass to the test runner (e.g., '--filter Category=Smoke')
+  - name: arguments
+    type: string
+    default: ''
 
-# Key-value pairs of environment variables to set during test execution
-- name: environment
-  type: object
-  default: {}
+  # Key-value pairs of environment variables to set during test execution
+  - name: environment
+    type: object
+    default: {}
 
-# Configuration for different test runtimes and their settings. This parameter defines a config map and should not be overridden when including the template.
-- name: toolsConfiguration
-  type: object
-  default:
-  - name: 'none'
-    runCmd: ''
-    resultsFormatName: ''
-    resultsFilePattern: ''
-    resultsArguments: ''
-    installSteps: []
+  # Configuration for different test runtimes and their settings. This parameter defines a config map and should not be overridden when including the template.
+  - name: toolsConfiguration
+    type: object
+    default:
+      - name: 'none'
+        runCmd: ''
+        resultsFormatName: ''
+        resultsFilePattern: ''
+        resultsArguments: ''
+        installSteps: []
 
-  - name: 'dotnet'
-    runCmd: 'dotnet'
-    version: '9.x'
-    resultsFormatName: 'VSTest'
-    resultsFilePattern: '**/*.trx'
-    resultsArguments: '--report-trx --results-directory'
-    installSteps:
-    # Install .NET SDK using the UseDotNet task. Because tool-specific variables are set after template evaluation,
-    # it's not possible to use `runtimeXXX` variables in task's display name, but they can be used in parameters.
-    - task: UseDotNet@2
-      displayName: 'Install .Net'
-      inputs:
-        version: '$(runtimeVersion)'
+      - name: 'dotnet'
+        runCmd: 'dotnet'
+        version: '9.x'
+        resultsFormatName: 'VSTest'
+        resultsFilePattern: '**/*.trx'
+        resultsArguments: '--report-trx --results-directory'
+        installSteps:
+          # Install .NET SDK using the UseDotNet task. Because tool-specific variables are set after template evaluation,
+          # it's not possible to use `runtimeXXX` variables in task's display name, but they can be used in parameters.
+          - task: UseDotNet@2
+            displayName: 'Install .Net'
+            inputs:
+              version: '$(runtimeVersion)'
 
 steps:
-- ${{ each tool in parameters.toolsConfiguration }}:
-  - ${{ if eq(tool.name, parameters.runtimeType) }}:
-    - bash: |
-        #!/bin/bash
-        echo "##vso[task.setvariable variable=runtimeType]${{ tool.name }}"
-        echo "##vso[task.setvariable variable=runtimeVersion]${{ coalesce(parameters.runtimeVersion, tool.version) }}"
-        echo "##vso[task.setvariable variable=artifactName]${{ parameters.artifactName }}"
-        echo "##vso[task.setvariable variable=files]${{ parameters.files }}"
-        echo "##vso[task.setvariable variable=arguments]${{ parameters.arguments }}"
-        echo "##vso[task.setvariable variable=runtimeRunCmd]${{ tool.runCmd }}"
-        echo "##vso[task.setvariable variable=runtimeResultsFormatName]${{ tool.resultsFormatName }}"
-        echo "##vso[task.setvariable variable=runtimeResultsFilePattern]${{ tool.resultsFilePattern }}"
-        echo "##vso[task.setvariable variable=runtimeResultsArguments]${{ tool.resultsArguments }}"
-      displayName: 'Set runtime variables'
+  - ${{ each tool in parameters.toolsConfiguration }}:
+      - ${{ if eq(tool.name, parameters.runtimeType) }}:
+          - bash: |
+              #!/bin/bash
+              echo "##vso[task.setvariable variable=runtimeType]${{ tool.name }}"
+              echo "##vso[task.setvariable variable=runtimeVersion]${{ coalesce(parameters.runtimeVersion, tool.version) }}"
+              echo "##vso[task.setvariable variable=artifactName]${{ parameters.artifactName }}"
+              echo "##vso[task.setvariable variable=files]${{ parameters.files }}"
+              echo "##vso[task.setvariable variable=arguments]${{ parameters.arguments }}"
+              echo "##vso[task.setvariable variable=runtimeRunCmd]${{ tool.runCmd }}"
+              echo "##vso[task.setvariable variable=runtimeResultsFormatName]${{ tool.resultsFormatName }}"
+              echo "##vso[task.setvariable variable=runtimeResultsFilePattern]${{ tool.resultsFilePattern }}"
+              echo "##vso[task.setvariable variable=runtimeResultsArguments]${{ tool.resultsArguments }}"
+            displayName: 'Set runtime variables'
 
-- bash: |
-    #!/bin/bash
-    echo "##vso[task.logissue type=error]Configuration for runtimeType '${{ parameters.runtimeType }}' is not defined."
-    exit 1
-  condition: and(succeeded(), eq(variables.runtimeType, ''))
-  displayName: 'Fail if runtime configuration is not defined'
+  - bash: |
+      #!/bin/bash
+      echo "##vso[task.logissue type=error]Configuration for runtimeType '${{ parameters.runtimeType }}' is not defined."
+      exit 1
+    condition: and(succeeded(), eq(variables.runtimeType, ''))
+    displayName: 'Fail if runtime configuration is not defined'
 
-- checkout: self
-  path: 'templates/build-tools'
+  - bash: |
+      #!/bin/bash
+      echo "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call `use-template-files.yml` first."
+      exit 1
+    condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
+    displayName: 'Fail if template files are not configured'
 
-- ${{ if ne(parameters.keyVaultName, '') }}:
-  - task: AzureKeyVault@2
+  - ${{ if ne(parameters.keyVaultName, '') }}:
+      - task: AzureKeyVault@2
+        inputs:
+          azureSubscription: '${{ parameters.azureSubscription }}'
+          KeyVaultName: '${{ parameters.keyVaultName }}'
+          SecretsFilter: '${{ parameters.keyVaultValuesFilter }}'
+
+  - ${{ parameters.beforeTestsSteps }}
+
+  - ${{ each tool in parameters.toolsConfiguration }}:
+      - ${{ if eq(tool.name, parameters.runtimeType) }}:
+          - ${{ each step in tool.installSteps }}:
+              - ${{ step }}
+
+  - ${{ if ne(parameters.runtimeType, 'none') }}:
+      # Run acceptance tests using the configured runtime. Test assemblies and results format are determined by the selected runtime and configuration.
+      - task: PowerShell@2
+        displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
+        inputs:
+          targetType: 'filePath'
+          filePath: 'scripts/Invoke-TestRunner.ps1'
+          arguments: >-
+            -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
+            -FilePattern "${{ parameters.files }}"
+            -ResultsDirectory "$(Agent.TempDirectory)"
+            -AdditionalArguments "${{ parameters.arguments }}"
+            -TestRunnerCommand "$(runtimeRunCmd)"
+            -TestResultsArguments "$(runtimeResultsArguments)"
+          pwsh: true
+          workingDirectory: '$(almguruTemplateFilesPath)'
+        ${{ if ne(parameters.environment, '') }}:
+          env:
+            ${{ each pair in parameters.environment }}:
+              ${{ pair.key }}: ${{ pair.value }}
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
     inputs:
-      azureSubscription: "${{ parameters.azureSubscription }}"
-      KeyVaultName: "${{ parameters.keyVaultName }}"
-      SecretsFilter: "${{ parameters.keyVaultValuesFilter }}"
+      testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
+      searchFolder: '$(Agent.TempDirectory)'
+      testResultsFormat: '$(runtimeResultsFormatName)'
+      testResultsFiles: '$(runtimeResultsFilePattern)'
+      mergeTestResults: true
+      failTaskOnMissingResultsFiles: true
+      failTaskOnFailedTests: true
+      failTaskOnFailureToPublishResults: true
+      publishRunAttachments: true
+    displayName: 'Publish acceptance tests results (${{ parameters.runtimeType }})'
 
-- ${{ parameters.beforeTestsSteps }}
-
-- ${{ each tool in parameters.toolsConfiguration }}:
-  - ${{ if eq(tool.name, parameters.runtimeType) }}:
-    - ${{ each step in tool.installSteps }}:
-        - ${{ step }}
-
-- ${{ if ne(parameters.runtimeType, 'none') }}:
-  # Run acceptance tests using the configured runtime. Test assemblies and results format are determined by the selected runtime and configuration.
-  - task: PowerShell@2
-    displayName: "Run acceptance tests (${{ parameters.runtimeType }})"
-    inputs:
-      targetType: 'filePath'
-      filePath: 'scripts/Invoke-TestRunner.ps1'
-      arguments: >-
-        -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
-        -FilePattern "${{ parameters.files }}"
-        -ResultsDirectory "$(Agent.TempDirectory)"
-        -AdditionalArguments "${{ parameters.arguments }}"
-        -TestRunnerCommand "$(runtimeRunCmd)"
-        -TestResultsArguments "$(runtimeResultsArguments)"
-      pwsh: true
-      workingDirectory: '$(Pipeline.Workspace)/templates/build-tools'
-    ${{ if ne(parameters.environment, '') }}:
-      env:
-        ${{ each pair in parameters.environment }}:
-          ${{ pair.key }}: ${{ pair.value }}
-
-- task: PublishTestResults@2
-  condition: succeededOrFailed()
-  inputs:
-    testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
-    searchFolder: "$(Agent.TempDirectory)"
-    testResultsFormat: '$(runtimeResultsFormatName)'
-    testResultsFiles: '$(runtimeResultsFilePattern)'
-    mergeTestResults: true
-    failTaskOnMissingResultsFiles: true
-    failTaskOnFailedTests: true
-    failTaskOnFailureToPublishResults: true
-    publishRunAttachments: true
-  displayName: "Publish acceptance tests results (${{ parameters.runtimeType }})"
-
-- ${{ parameters.afterTestsSteps }}
+  - ${{ parameters.afterTestsSteps }}
