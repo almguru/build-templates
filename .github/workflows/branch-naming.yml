@@ -1,0 +1,76 @@
+name: Branch Naming Convention
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-branch-naming:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch naming convention
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          echo "Checking branch name: $BRANCH_NAME"
+
+          # Define allowed branch prefixes
+          allowed_prefixes="^(features|bugfix|hotfix|docs|chore)/"
+
+          if [[ "$BRANCH_NAME" =~ $allowed_prefixes ]]; then
+            echo "✅ Branch name follows the naming convention!"
+            echo "Branch: $BRANCH_NAME"
+          else
+            echo "❌ Branch name does not follow the naming convention!"
+            echo "Current branch: $BRANCH_NAME"
+            echo ""
+            echo "Please rename your branch to follow one of these patterns:"
+            echo "  - features/your-feature-name"
+            echo "  - bugfix/your-bug-fix"
+            echo "  - hotfix/your-hotfix"
+            echo "  - docs/your-documentation-update"
+            echo "  - chore/your-maintenance-task"
+            echo ""
+            echo "Example: features/add-user-authentication"
+            echo ""
+            echo "To rename your current branch:"
+            echo "  git branch -m \"$BRANCH_NAME\" features/your-new-name"
+            echo "  git push origin -u features/your-new-name"
+            echo "  git push origin --delete \"$BRANCH_NAME\""
+            exit 1
+          fi
+
+      - name: Add branch naming comment
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ Branch Naming Convention Issue
+              
+              Hi @${{ github.actor }}! 👋
+              
+              Your branch name \`${{ github.head_ref }}\` doesn't follow our naming convention.
+              
+              ### Required Format
+              Please rename your branch to use one of these prefixes:
+              - \`features/\` - for new features
+              - \`bugfix/\` - for bug fixes  
+              - \`hotfix/\` - for urgent fixes
+              - \`docs/\` - for documentation updates
+              - \`chore/\` - for maintenance tasks
+              
+              ### Example
+              \`\`\`bash
+              git branch -m ${{ github.head_ref }} features/your-descriptive-name
+              git push origin -u features/your-descriptive-name
+              git push origin --delete ${{ github.head_ref }}
+              \`\`\`
+              
+              📖 See our [Branch Naming Guide](https://github.com/${{ github.repository }}/blob/main/.github/BRANCH_NAMING.md) for more details.
+              
+              Once you've renamed your branch, this check will automatically pass! 🚀`
+            })
