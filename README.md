@@ -9,7 +9,7 @@ Collection of useful templates for Azure DevOps YAML pipelines. This repository 
 | Code Smells | [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
 | Maintainability Rating | [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
 | Security Rating | [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=almguru_build-templates&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=almguru_build-templates) |
-| CodeQL | ![CodeQL](https://github.com/almguru/build-templates/actions/workflows/codeql.yml/badge.svg) |
+| CodeQL | [![CodeQL](https://github.com/almguru/build-templates/actions/workflows/codeql.yml/badge.svg)](https://github.com/almguru/build-templates/actions/workflows/codeql.yml) |
 
 ## Table of Contents
 
