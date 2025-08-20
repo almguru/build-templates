@@ -16,5 +16,9 @@
         "setvariable",
         "vstest",
         "xunit"
-    ]
+    ],
+    "sonarlint.connectedMode.project": {
+        "connectionId": "almguru",
+        "projectKey": "almguru_build-templates"
+    }
 }

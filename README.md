@@ -88,10 +88,33 @@ stages:
 
 ## Contributing
 
+We welcome contributions to improve these templates! Please follow our guidelines:
+
+### Branch Naming Convention
+
+This repository follows a structured branch naming convention. All branches must use one of these prefixes:
+
+- `features/` - For new features or enhancements
+- `bugfix/` - For bug fixes
+- `hotfix/` - For urgent production fixes
+- `docs/` - For documentation updates
+- `chore/` - For maintenance and cleanup tasks
+
+**Examples:**
+- `features/add-docker-template`
+- `bugfix/fix-bicep-parameter-parsing`
+- `docs/update-readme`
+
+📖 **[Complete Branch Naming Guide](.github/BRANCH_NAMING.md)** - Detailed information about our branch naming conventions.
+
+### How to Contribute
+
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch following our naming convention: `git checkout -b features/your-feature-name`
 3. Make your changes
 4. Test the templates in your pipeline
 5. Submit a pull request
+
+Our automated checks will verify that your branch follows the naming convention.
 
 For questions or issues, please create an issue in this repository.
