@@ -5,7 +5,7 @@
 # Description: A reusable template for executing Azure CLI commands in Azure DevOps pipelines.
 # This template provides a standardized way to run Azure CLI scripts with configurable script types
 # (PowerShell, PowerShell Core, Bash, or Batch) and supports both inline scripts and script files.
-# 
+#
 # Parameters:
 # - azureSubscription: The Azure service connection to use
 # - defaultDisplayName: Default display name for the task
@@ -13,52 +13,61 @@
 # - script: Object containing script configuration (type, location, script content, arguments, displayName)
 
 parameters:
-# Name of the Azure RM service connection to use for the deployment
-- name: azureSubscription
-  type: string
-  default: ''
+  # Name of the Azure RM service connection to use for the deployment
+  - name: azureSubscription
+    type: string
+    default: ''
 
-# Default display name for the Azure CLI task if not specified in the script object
-- name: defaultDisplayName
-  type: string
-  default: 'Azure CLI script'
+  # Default display name for the Azure CLI task if not specified in the script object
+  - name: defaultDisplayName
+    type: string
+    default: 'Azure CLI script'
 
-# Default script type to use if not specified in the script object
-# Supported values: 'bash', 'ps', 'pscore', 'batch'
-# - 'bash' for Bash scripts
-# - 'ps' for PowerShell scripts
-# - 'pscore' for PowerShell Core scripts
-# - 'batch' for Batch scripts
-- name: defaultScriptType
-  type: string
-  default: 'bash'
-  values:
-  - 'ps'        # PowerShell
-  - 'pscore'    # PowerShell Core
-  - 'bash'      # Bash
-  - 'batch'     # Batch file
+  # Default script type to use if not specified in the script object
+  # Supported values: 'bash', 'ps', 'pscore', 'batch'
+  # - 'bash' for Bash scripts
+  # - 'ps' for PowerShell scripts
+  # - 'pscore' for PowerShell Core scripts
+  # - 'batch' for Batch scripts
+  - name: defaultScriptType
+    type: string
+    default: 'bash'
+    values:
+      - 'ps' # PowerShell
+      - 'pscore' # PowerShell Core
+      - 'bash' # Bash
+      - 'batch' # Batch file
 
-# Script configuration object containing:
-# - type: Type of the script (bash, ps, pscore, batch)
-# - location: Location of the script (inlineScript or scriptPath)
-# - script: The script content or path to the script file
-# - arguments: Optional arguments to pass to the script for file scripts
-# - displayName: Optional display name for the task
-# - workingDirectory: Optional working directory for the script execution. Defaults is `$(System.DefaultWorkingDirectory)`
-# - addSpnToEnvironment: Optional flag to add the service principal to the environment variables. Defaults to false.
-- name: script
-  type: object
-  default: {}
+  # Script configuration object containing:
+  # - type: Type of the script (bash, ps, pscore, batch)
+  # - location: Location of the script (inlineScript or scriptPath)
+  # - script: The script content or path to the script file
+  # - arguments: Optional arguments to pass to the script for file scripts
+  # - displayName: Optional display name for the task
+  # - workingDirectory: Optional working directory for the script execution. Defaults is `$(System.DefaultWorkingDirectory)`
+  # - addSpnToEnvironment: Optional flag to add the service principal to the environment variables. Defaults to false.
+  - name: script
+    type: object
+    default: {}
+
+  # Key-value pairs of environment variables to set during script execution
+  - name: environment
+    type: object
+    default: {}
 
 steps:
-- task: AzureCLI@2
-  inputs:
-    azureSubscription: '${{ parameters.azureSubscription }}'
-    scriptType: ${{ coalesce(parameters.script.type, parameters.defaultScriptType) }}
-    scriptLocation: ${{ coalesce(parameters.script.location, 'inlineScript') }}
-    ${{ coalesce(parameters.script.location, 'inlineScript') }}: ${{ parameters.script.script }}
-    ${{ if parameters.script.arguments }}:
-      arguments: '${{ parameters.script.arguments }}'
-    workingDirectory: ${{ coalesce(parameters.script.workingDirectory, '$(System.DefaultWorkingDirectory)') }}
-    addSpnToEnvironment: ${{ coalesce(parameters.script.addSpnToEnvironment, false) }}
-  displayName: ${{ coalesce(parameters.script.displayName, parameters.defaultDisplayName) }}
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: ${{ coalesce(parameters.script.type, parameters.defaultScriptType) }}
+      scriptLocation: ${{ coalesce(parameters.script.location, 'inlineScript') }}
+      ${{ coalesce(parameters.script.location, 'inlineScript') }}: ${{ parameters.script.script }}
+      ${{ if parameters.script.arguments }}:
+        arguments: '${{ parameters.script.arguments }}'
+      workingDirectory: ${{ coalesce(parameters.script.workingDirectory, '$(System.DefaultWorkingDirectory)') }}
+      addSpnToEnvironment: ${{ coalesce(parameters.script.addSpnToEnvironment, false) }}
+    ${{ if ne(parameters.environment, '') }}:
+      env:
+        ${{ each pair in parameters.environment }}:
+          ${{ pair.key }}: ${{ pair.value }}
+    displayName: ${{ coalesce(parameters.script.displayName, parameters.defaultDisplayName) }}
