@@ -44,7 +44,7 @@ parameters:
   # - script: The script content or path to the script file
   # - arguments: Optional arguments to pass to the script for file scripts
   # - displayName: Optional display name for the task
-  # - workingDirectory: Optional working directory for the script execution. Defaults is `$(System.DefaultWorkingDirectory)`
+  # - workingDirectory: Optional working directory for the script execution. Default is `$(System.DefaultWorkingDirectory)`
   # - addSpnToEnvironment: Optional flag to add the service principal to the environment variables. Defaults to false.
   - name: script
     type: object
