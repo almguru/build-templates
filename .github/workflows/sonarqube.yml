@@ -11,6 +11,8 @@ jobs:
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,5 +21,3 @@ jobs:
         uses: sonarsource/sonarcloud-actions/setup-sonarcloud@v2
       - name: Run SonarCloud Scan
         uses: sonarsource/sonarcloud-actions/scan@v2
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
