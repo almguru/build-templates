@@ -1,3 +1,6 @@
+permissions:
+  contents: read
+  issues: write
 name: Branch Naming Convention
 
 on:
@@ -17,7 +20,17 @@ jobs:
           # Define allowed branch prefixes
           allowed_prefixes="^(features|bugfix|hotfix|docs|chore)/"
 
-          if [[ "$BRANCH_NAME" =~ $allowed_prefixes ]]; then
+    env:
+      ALLOWED_PREFIXES: "^(features|bugfix|hotfix|docs|chore)/"
+    steps:
+      - name: Check branch naming convention
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          echo "Checking branch name: $BRANCH_NAME"
+          echo "Allowed branch prefixes regex: $ALLOWED_PREFIXES"
+
+          if [[ "$BRANCH_NAME" =~ $ALLOWED_PREFIXES ]]; then
             echo "✅ Branch name follows the naming convention!"
             echo "Branch: $BRANCH_NAME"
           else
