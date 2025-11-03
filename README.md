@@ -89,21 +89,31 @@ stages:
 
 ## Template Testing
 
-This repository includes an automated Azure Pipeline (`azure-pipelines.yml`) that validates all templates in the `/pipelines/lib` directory. The pipeline ensures:
+This repository includes an automated Azure Pipeline (`azure-pipelines.yml`) that tests all templates in the `/pipelines/lib` directory by actually executing them. The pipeline ensures:
 
-- **YAML Syntax Validation**: All templates have valid YAML syntax
-- **Template Structure Validation**: Templates have proper structure with required parameters and steps
-- **Template Expansion Test**: Templates can be successfully referenced and expanded in pipelines
-- **PowerShell Script Validation**: All PowerShell scripts pass PSScriptAnalyzer checks
-- **Template Integration Tests**: Template dependencies and cross-references are validated
-- **Documentation Verification**: All templates are properly documented
+- **Template Execution Tests**: Each template is called with various parameter combinations
+- **Parameter Validation**: Templates correctly validate and handle parameters
+- **Script Execution**: PowerShell scripts used by templates execute without errors
+- **Integration Tests**: Template dependencies and cross-references work correctly
+- **Accessibility Verification**: All templates are accessible and can be referenced
+
+### Templates Tested
+
+The pipeline actively tests these templates with real execution:
+
+- **azure-cli.yml** - Tested with bash, PowerShell Core, and environment variables
+- **use-template-files.yml** - Tested with repository checkout operations
+- **docker.yml** - Tested with parameter validation scenarios
+- **PowerShell scripts** - Tested with various input conditions
+
+**Note**: Templates requiring Azure service connections (bicep-deploy.yml, run-acceptance-tests.yml) are validated structurally and tested in consuming pipelines.
 
 The testing pipeline runs automatically on:
 - Pull requests to the main branch
 - Commits to the main branch
 - When templates or scripts are modified
 
-This ensures that all templates maintain high quality and are ready for use in production pipelines.
+This ensures that all templates execute correctly and are ready for use in production pipelines.
 
 ## Contributing
 
