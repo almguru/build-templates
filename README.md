@@ -17,6 +17,7 @@ Collection of useful templates for Azure DevOps YAML pipelines. This repository 
 - [Available Templates](#available-templates)
 - [Quick Start](#quick-start)
 - [Documentation](#documentation)
+- [Template Testing](#template-testing)
 - [Contributing](#contributing)
 
 ## Overview
@@ -85,6 +86,24 @@ stages:
 ## Documentation
 
 📖 **[Complete Template Documentation](pipelines/lib/README.md)** - Detailed documentation with parameters, examples, and usage patterns for all templates.
+
+## Template Testing
+
+This repository includes an automated Azure Pipeline (`azure-pipelines.yml`) that validates all templates in the `/pipelines/lib` directory. The pipeline ensures:
+
+- **YAML Syntax Validation**: All templates have valid YAML syntax
+- **Template Structure Validation**: Templates have proper structure with required parameters and steps
+- **Template Expansion Test**: Templates can be successfully referenced and expanded in pipelines
+- **PowerShell Script Validation**: All PowerShell scripts pass PSScriptAnalyzer checks
+- **Template Integration Tests**: Template dependencies and cross-references are validated
+- **Documentation Verification**: All templates are properly documented
+
+The testing pipeline runs automatically on:
+- Pull requests to the main branch
+- Commits to the main branch
+- When templates or scripts are modified
+
+This ensures that all templates maintain high quality and are ready for use in production pipelines.
 
 ## Contributing
 
