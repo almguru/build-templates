@@ -146,23 +146,32 @@ stages:
 
                         # Validate parameters section if present
                         if ($hasParameters) {
-                            $paramCount = $yaml.parameters.Count
-                            Write-Host "  ✓ Found $paramCount parameter(s)"
+                            if ($null -ne $yaml.parameters) {
+                                $paramCount = $yaml.parameters.Count
+                                Write-Host "  ✓ Found $paramCount parameter(s)"
 
-                            foreach ($param in $yaml.parameters) {
-                                $paramName = $param.name
-                                if ([string]::IsNullOrEmpty($paramName)) {
-                                    $validationErrors += "$($template.Name): Parameter is missing 'name' property"
-                                } else {
-                                    Write-Host "    - Parameter: $paramName"
+                                foreach ($param in $yaml.parameters) {
+                                    # Handle both hashtable and PSCustomObject parameter structures
+                                    $paramName = if ($param -is [hashtable]) { $param['name'] } else { $param.name }
+                                    if ([string]::IsNullOrEmpty($paramName)) {
+                                        $validationErrors += "$($template.Name): Parameter is missing 'name' property"
+                                    } else {
+                                        Write-Host "    - Parameter: $paramName"
+                                    }
                                 }
+                            } else {
+                                Write-Host "  ⚠ Parameters section exists but is empty"
                             }
                         }
 
                         # Validate steps section if present
                         if ($hasSteps) {
-                            $stepCount = $yaml.steps.Count
-                            Write-Host "  ✓ Found $stepCount step(s)"
+                            if ($null -ne $yaml.steps) {
+                                $stepCount = $yaml.steps.Count
+                                Write-Host "  ✓ Found $stepCount step(s)"
+                            } else {
+                                Write-Host "  ⚠ Steps section exists but is empty"
+                            }
                         }
 
                         Write-Host "✓ Structure validation passed for $($template.Name)"
@@ -301,7 +310,7 @@ stages:
                 $runTestsTemplate = Get-Content -Path "$(templatesPath)/run-acceptance-tests.yml" -Raw
 
                 # Verify bicep-deploy references azure-cli
-                if ($bicepTemplate -match "template:\s+azure-cli\.yml") {
+                if ($bicepTemplate -match "-\s+template:\s+azure-cli\.yml") {
                     Write-Host "✓ bicep-deploy.yml correctly references azure-cli.yml"
                 } else {
                     Write-Host "##[error]bicep-deploy.yml does not reference azure-cli.yml correctly"
@@ -309,7 +318,7 @@ stages:
                 }
 
                 # Verify run-acceptance-tests references azure-cli
-                if ($runTestsTemplate -match "template:\s+azure-cli\.yml") {
+                if ($runTestsTemplate -match "-\s+template:\s+azure-cli\.yml") {
                     Write-Host "✓ run-acceptance-tests.yml correctly references azure-cli.yml"
                 } else {
                     Write-Host "##[error]run-acceptance-tests.yml does not reference azure-cli.yml correctly"
