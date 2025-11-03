@@ -199,24 +199,46 @@ steps:
 
   - ${{ if ne(parameters.runtimeType, 'none') }}:
       # Run acceptance tests using the configured runtime. Test assemblies and results format are determined by the selected runtime and configuration.
-      - task: PowerShell@2
-        displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
-        inputs:
-          targetType: 'filePath'
-          filePath: 'scripts/Invoke-TestRunner.ps1'
-          arguments: >-
-            -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
-            -FilePattern "${{ parameters.files }}"
-            -ResultsDirectory "$(Agent.TempDirectory)"
-            -AdditionalArguments "${{ parameters.arguments }}"
-            -TestRunnerCommand "$(runtimeRunCmd)"
-            -TestResultsArguments "$(runtimeResultsArguments)"
-          pwsh: true
-          workingDirectory: '$(almguruTemplateFilesPath)'
-        ${{ if ne(parameters.environment, '') }}:
-          env:
-            ${{ each pair in parameters.environment }}:
-              ${{ pair.key }}: ${{ pair.value }}
+      # If azureSubscription is provided, use Azure CLI template; otherwise use regular PowerShell task.
+      - ${{ if ne(parameters.azureSubscription, '') }}:
+          - template: azure-cli.yml
+            parameters:
+              azureSubscription: '${{ parameters.azureSubscription }}'
+              defaultScriptType: 'pscore'
+              script:
+                type: 'pscore'
+                location: 'scriptPath'
+                script: 'scripts/Invoke-TestRunner.ps1'
+                arguments: >-
+                  -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
+                  -FilePattern "${{ parameters.files }}"
+                  -ResultsDirectory "$(Agent.TempDirectory)"
+                  -AdditionalArguments "${{ parameters.arguments }}"
+                  -TestRunnerCommand "$(runtimeRunCmd)"
+                  -TestResultsArguments "$(runtimeResultsArguments)"
+                workingDirectory: '$(almguruTemplateFilesPath)'
+                displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
+              environment: ${{ parameters.environment }}
+
+      - ${{ if eq(parameters.azureSubscription, '') }}:
+          - task: PowerShell@2
+            displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
+            inputs:
+              targetType: 'filePath'
+              filePath: 'scripts/Invoke-TestRunner.ps1'
+              arguments: >-
+                -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
+                -FilePattern "${{ parameters.files }}"
+                -ResultsDirectory "$(Agent.TempDirectory)"
+                -AdditionalArguments "${{ parameters.arguments }}"
+                -TestRunnerCommand "$(runtimeRunCmd)"
+                -TestResultsArguments "$(runtimeResultsArguments)"
+              pwsh: true
+              workingDirectory: '$(almguruTemplateFilesPath)'
+            ${{ if ne(parameters.environment, '') }}:
+              env:
+                ${{ each pair in parameters.environment }}:
+                  ${{ pair.key }}: ${{ pair.value }}
 
   - task: PublishTestResults@2
     condition: succeededOrFailed()
