@@ -72,6 +72,7 @@
     https://docs.microsoft.com/en-us/azure/devops/pipelines/
 #>
 
+[CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory = $true, HelpMessage = "Root directory path where test files will be searched")]
     [ValidateNotNullOrEmpty()]
@@ -113,28 +114,42 @@ function Find-TestFiles {
 
     $hasWildcard = $FilePattern -match '[*?]'
     if ($hasWildcard) {
-        # Special handling for patterns ending with a concrete file (e.g. **/subfolder/file.ext)
         # Convert '/' to '\' for Windows path matching
         $patternWin = $FilePattern -replace '/', '\'
-
-        if ($FilePattern -match '^\*\*/.+[^*?]$') {
-            # Find all files whose FullName ends with pattern after '**/' (replace '/' with '\')
-            $tailPattern = $patternWin -replace '^\*\*\\', '' # Remove leading '**\'
-            Write-Host "Searching for files ending with: $tailPattern under $SearchPath"
-            return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like "*$tailPattern" }
-        } else {
-            # General pattern, replace '**/' by '*' and '/' by '\'
-            $searchPattern = $patternWin -replace '^\*\*/', '*' 
-            Write-Host "Searching for files matching pattern: $searchPattern in $SearchPath"
-            return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like $searchPattern }
+        
+        # Replace '**/' or '**\' with wildcard matching any directory depth
+        # We'll use -like with a pattern that matches the relative path from SearchPath
+        $searchPattern = $patternWin -replace '\*\*[/\\]', '*\'
+        
+        Write-Host "Searching for files matching pattern: $FilePattern in $SearchPath"
+        
+        # Get all files recursively and filter by matching the relative path
+        $files = Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object {
+            # Get the relative path from SearchPath
+            $relativePath = $_.FullName.Substring($SearchPath.TrimEnd('\', '/').Length).TrimStart('\', '/')
+            
+            # On macOS/Linux, keep the path with forward slashes for matching
+            if ($PSVersionTable.Platform -eq 'Unix' -or $PSVersionTable.OS -match 'Darwin') {
+                $relativePath = $relativePath -replace '\\', '/'
+                $matchPattern = $FilePattern -replace '\*\*/', '*/'
+            }
+            else {
+                $matchPattern = $searchPattern
+            }
+            
+            $relativePath -like $matchPattern
         }
-    } else {
+        
+        return $files
+    }
+    else {
         # No wildcards - treat as direct path or file name
         $directFile = Join-Path -Path $SearchPath -ChildPath $FilePattern
         if (Test-Path $directFile) {
             Write-Host "Found file by direct path: $directFile"
             return @(Get-Item $directFile)
-        } else {
+        }
+        else {
             Write-Host "Attempting fallback search for file name '$FilePattern' in $SearchPath"
             return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.Name -ieq $FilePattern }
         }
@@ -156,8 +171,11 @@ foreach ($file in $files) {
     $testRunCmd += $testArguments
     
     Write-Host "##[command]$($testRunCmd -join ' ')"
-    & $testRunCmd[0] $testRunCmd[1..($testRunCmd.Length - 1)]
-    $allExitCodes += $LASTEXITCODE
+    
+    if ($PSCmdlet.ShouldProcess($file.FullName, "Execute test runner $TestRunnerCommand")) {
+        & $testRunCmd[0] $testRunCmd[1..($testRunCmd.Length - 1)]
+        $allExitCodes += $LASTEXITCODE
+    }
 }
 
 $overallExitCode = ($allExitCodes | Where-Object { $_ -ne 0 }) | Select-Object -First 1
