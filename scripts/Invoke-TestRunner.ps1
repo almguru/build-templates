@@ -73,26 +73,26 @@
 #>
 
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Root directory path where test files will be searched")
+    [Parameter(Mandatory = $true, HelpMessage = "Root directory path where test files will be searched")]
     [ValidateNotNullOrEmpty()]
     [string]$SearchPath,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Glob pattern to match test files (e.g., '**/*.dll')")
+    [Parameter(Mandatory = $true, HelpMessage = "Glob pattern to match test files (e.g., '**/*.dll')")]
     [ValidateNotNullOrEmpty()]
     [string]$FilePattern,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Directory where test results will be stored")
+    [Parameter(Mandatory = $true, HelpMessage = "Directory where test results will be stored")]
     [ValidateNotNullOrEmpty()]
     [string]$ResultsDirectory,
     
-    [Parameter(Mandatory = $false, HelpMessage = "Additional arguments to pass to the test runner")
+    [Parameter(Mandatory = $false, HelpMessage = "Additional arguments to pass to the test runner")]
     [string]$AdditionalArguments = "",
     
-    [Parameter(Mandatory = $true, HelpMessage = "Test runner command or executable name")
+    [Parameter(Mandatory = $true, HelpMessage = "Test runner command or executable name")]
     [ValidateNotNullOrEmpty()]
     [string]$TestRunnerCommand,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Test results format and output arguments for the test runner")
+    [Parameter(Mandatory = $true, HelpMessage = "Test results format and output arguments for the test runner")]
     [ValidateNotNullOrEmpty()]
     [string]$TestResultsArguments
 )
