@@ -47,14 +47,14 @@
     The actual command executed will be: vstest.console.exe [TestFile] --logger:trx --ResultsDirectory: C:\TestResults
 
 .EXAMPLE
-    .\Invoke-TestRunner.ps1 -SearchPath ".\bin\Release" -FilePattern "**/UnitTests.dll" -ResultsDirectory ".\results" -TestRunnerCommand "xunit.console.exe" -TestResultsArguments "--reporter trx --output" -AdditionalArguments "--parallel all"
+    .\Invoke-TestRunner.ps1 -SearchPath ".\bin\Release" -FilePattern "**/UnitTests.dll" -ResultsDirectory ".\results" -TestRunnerCommand "xunit.console.exe" -TestResultsArguments "--reporter trx --output"
 
     Runs xUnit v3 console on UnitTests.dll files with parallel execution.
     The actual command executed will be: xunit.console.exe [TestFile] --reporter trx --output .\results --parallel all
 
 .NOTES
     Author: Vladimir Gusarov
-    Version: 1.0
+    Version: 1.2
     
     This script is designed to work with Azure DevOps build pipelines but can be used
     independently. It handles multiple test assemblies and aggregates exit codes to
@@ -66,32 +66,33 @@
     Exit codes:
     - 0: All tests passed
     - Non-zero: One or more test assemblies failed (returns the first non-zero exit code)
+    - 10: No files matched the pattern or were found
 
 .LINK
     https://docs.microsoft.com/en-us/azure/devops/pipelines/
 #>
 
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Root directory path where test files will be searched")]
+    [Parameter(Mandatory = $true, HelpMessage = "Root directory path where test files will be searched")
     [ValidateNotNullOrEmpty()]
     [string]$SearchPath,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Glob pattern to match test files (e.g., '**/*.dll')")]
+    [Parameter(Mandatory = $true, HelpMessage = "Glob pattern to match test files (e.g., '**/*.dll')")
     [ValidateNotNullOrEmpty()]
     [string]$FilePattern,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Directory where test results will be stored")]
+    [Parameter(Mandatory = $true, HelpMessage = "Directory where test results will be stored")
     [ValidateNotNullOrEmpty()]
     [string]$ResultsDirectory,
     
-    [Parameter(Mandatory = $false, HelpMessage = "Additional arguments to pass to the test runner")]
+    [Parameter(Mandatory = $false, HelpMessage = "Additional arguments to pass to the test runner")
     [string]$AdditionalArguments = "",
     
-    [Parameter(Mandatory = $true, HelpMessage = "Test runner command or executable name")]
+    [Parameter(Mandatory = $true, HelpMessage = "Test runner command or executable name")
     [ValidateNotNullOrEmpty()]
     [string]$TestRunnerCommand,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Test results format and output arguments for the test runner")]
+    [Parameter(Mandatory = $true, HelpMessage = "Test results format and output arguments for the test runner")
     [ValidateNotNullOrEmpty()]
     [string]$TestResultsArguments
 )
@@ -104,14 +105,48 @@ if (![string]::IsNullOrWhiteSpace($AdditionalArguments)) {
     $testArguments += $AdditionalArguments.Trim() -split '\s+' | Where-Object { $_ -ne '' }
 }
 
-# Convert Azure Pipelines glob pattern to PowerShell
-$searchPattern = $FilePattern -replace '\*\*/', '*' -replace '/', '\'
+function Find-TestFiles {
+    param(
+        [string]$SearchPath,
+        [string]$FilePattern
+    )
 
-Write-Host "Searching for files matching: $searchPattern in $SearchPath"
-$files = Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like $searchPattern }
+    $hasWildcard = $FilePattern -match '[*?]'
+    if ($hasWildcard) {
+        # Special handling for patterns ending with a concrete file (e.g. **/subfolder/file.ext)
+        # Convert '/' to '\' for Windows path matching
+        $patternWin = $FilePattern -replace '/', '\'
+
+        if ($FilePattern -match '^\*\*/.+[^*?]$') {
+            # Find all files whose FullName ends with pattern after '**/' (replace '/' with '\')
+            $tailPattern = $patternWin -replace '^\*\*\\', '' # Remove leading '**\'
+            Write-Host "Searching for files ending with: $tailPattern under $SearchPath"
+            return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like "*$tailPattern" }
+        } else {
+            # General pattern, replace '**/' by '*' and '/' by '\'
+            $searchPattern = $patternWin -replace '^\*\*/', '*' 
+            Write-Host "Searching for files matching pattern: $searchPattern in $SearchPath"
+            return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.FullName -like $searchPattern }
+        }
+    } else {
+        # No wildcards - treat as direct path or file name
+        $directFile = Join-Path -Path $SearchPath -ChildPath $FilePattern
+        if (Test-Path $directFile) {
+            Write-Host "Found file by direct path: $directFile"
+            return @(Get-Item $directFile)
+        } else {
+            Write-Host "Attempting fallback search for file name '$FilePattern' in $SearchPath"
+            return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.Name -ieq $FilePattern }
+        }
+    }
+}
+
+$files = Find-TestFiles -SearchPath $SearchPath -FilePattern $FilePattern
 
 if ($files.Count -eq 0) {
     Write-Warning "No files found matching pattern: $FilePattern"
+    Write-Host "##vso[task.logissue type=error]No test assemblies were found to execute."
+    exit 10
 }
 
 $allExitCodes = @()
@@ -125,9 +160,7 @@ foreach ($file in $files) {
     $allExitCodes += $LASTEXITCODE
 }
 
-# Set overall exit code based on any failures
 $overallExitCode = ($allExitCodes | Where-Object { $_ -ne 0 }) | Select-Object -First 1
-
 if ($null -ne $overallExitCode) {
     Write-Host "##vso[task.logissue type=warning]One or more test assemblies failed"
     exit $overallExitCode
