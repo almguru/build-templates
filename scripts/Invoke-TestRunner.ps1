@@ -49,8 +49,8 @@
 .EXAMPLE
     .\Invoke-TestRunner.ps1 -SearchPath ".\bin\Release" -FilePattern "**/UnitTests.dll" -ResultsDirectory ".\results" -TestRunnerCommand "xunit.console.exe" -TestResultsArguments "--reporter trx --output"
 
-    Runs xUnit v3 console on UnitTests.dll files with parallel execution.
-    The actual command executed will be: xunit.console.exe [TestFile] --reporter trx --output .\results --parallel all
+    Runs xUnit v3 console on UnitTests.dll files.
+    The actual command executed will be: xunit.console.exe [TestFile] --reporter trx --output .\results
 
 .NOTES
     Author: Vladimir Gusarov
