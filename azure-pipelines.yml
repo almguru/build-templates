@@ -144,9 +144,14 @@ stages:
                   repositoryName: ''  # Missing required parameter
 
           - script: |
-              echo "Docker template parameter validation test completed"
-            displayName: 'Validation Test Complete'
-            condition: failed()  # This should run because validation should fail
+              echo "Checking for expected validation error in previous step logs"
+              if ! grep -q "repositoryName.*required" "$(System.DefaultWorkingDirectory)/_temp/_log.txt"; then
+                echo "##vso[task.logissue type=error]Expected validation error for missing repositoryName not found"
+                exit 1
+              fi
+              echo "Validation error detected as expected"
+            displayName: 'Explicit Validation Check'
+            continueOnError: false
 
   # Test PowerShell scripts used by templates
   - stage: TestScripts
