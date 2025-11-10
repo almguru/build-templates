@@ -20,7 +20,6 @@ steps:
     path: ${{ parameters.repositoryLocalPath }}
     displayName: 'Checkout template resources'
 
-  - bash: |
-      #!/bin/bash
-      echo "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)/${{ parameters.repositoryLocalPath }}"
+  - pwsh: |
+      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)/${{ parameters.repositoryLocalPath }}"
     displayName: 'Set template resources path variable'

@@ -156,29 +156,26 @@ parameters:
 steps:
   - ${{ each tool in parameters.toolsConfiguration }}:
       - ${{ if eq(tool.name, parameters.runtimeType) }}:
-          - bash: |
-              #!/bin/bash
-              echo "##vso[task.setvariable variable=runtimeType]${{ tool.name }}"
-              echo "##vso[task.setvariable variable=runtimeVersion]${{ coalesce(parameters.runtimeVersion, tool.version) }}"
-              echo "##vso[task.setvariable variable=artifactName]${{ parameters.artifactName }}"
-              echo "##vso[task.setvariable variable=files]${{ parameters.files }}"
-              echo "##vso[task.setvariable variable=arguments]${{ parameters.arguments }}"
-              echo "##vso[task.setvariable variable=runtimeRunCmd]${{ tool.runCmd }}"
-              echo "##vso[task.setvariable variable=runtimeResultsFormatName]${{ tool.resultsFormatName }}"
-              echo "##vso[task.setvariable variable=runtimeResultsFilePattern]${{ tool.resultsFilePattern }}"
-              echo "##vso[task.setvariable variable=runtimeResultsArguments]${{ tool.resultsArguments }}"
+          - pwsh: |
+              Write-Host "##vso[task.setvariable variable=runtimeType]${{ tool.name }}"
+              Write-Host "##vso[task.setvariable variable=runtimeVersion]${{ coalesce(parameters.runtimeVersion, tool.version) }}"
+              Write-Host "##vso[task.setvariable variable=artifactName]${{ parameters.artifactName }}"
+              Write-Host "##vso[task.setvariable variable=files]${{ parameters.files }}"
+              Write-Host "##vso[task.setvariable variable=arguments]${{ parameters.arguments }}"
+              Write-Host "##vso[task.setvariable variable=runtimeRunCmd]${{ tool.runCmd }}"
+              Write-Host "##vso[task.setvariable variable=runtimeResultsFormatName]${{ tool.resultsFormatName }}"
+              Write-Host "##vso[task.setvariable variable=runtimeResultsFilePattern]${{ tool.resultsFilePattern }}"
+              Write-Host "##vso[task.setvariable variable=runtimeResultsArguments]${{ tool.resultsArguments }}"
             displayName: 'Set runtime variables'
 
-  - bash: |
-      #!/bin/bash
-      echo "##vso[task.logissue type=error]Configuration for runtimeType '${{ parameters.runtimeType }}' is not defined."
+  - pwsh: |
+      Write-Host "##vso[task.logissue type=error]Configuration for runtimeType '${{ parameters.runtimeType }}' is not defined."
       exit 1
     condition: and(succeeded(), eq(variables.runtimeType, ''))
     displayName: 'Fail if runtime configuration is not defined'
 
-  - bash: |
-      #!/bin/bash
-      echo "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call `use-template-files.yml` first."
+  - pwsh: |
+      Write-Host "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call `use-template-files.yml` first."
       exit 1
     condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
     displayName: 'Fail if template files are not configured'
