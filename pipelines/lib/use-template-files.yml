@@ -21,5 +21,6 @@ steps:
     displayName: 'Checkout template resources'
 
   - pwsh: |
-      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)/${{ parameters.repositoryLocalPath }}"
+      $separator = [System.IO.Path]::DirectorySeparatorChar
+      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)$separator${{ parameters.repositoryLocalPath }}"
     displayName: 'Set template resources path variable'
