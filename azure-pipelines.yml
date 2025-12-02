@@ -342,14 +342,188 @@ stages:
       - job: Summary
         displayName: 'Generate test summary'
         steps:
+          - checkout: self
+
           - task: PowerShell@2
-            displayName: 'Display summary'
+            displayName: 'Generate Markdown Report'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Get stage results
+                $azureCliResult = "$(stageDependencies.TestAzureCLI.result)"
+                $useTemplateFilesResult = "$(stageDependencies.TestUseTemplateFiles.result)"
+                $dockerResult = "$(stageDependencies.TestDocker.result)"
+                $scriptsResult = "$(stageDependencies.TestScripts.result)"
+                $accessibilityResult = "$(stageDependencies.VerifyTemplateAccessibility.result)"
+                
+                # Function to get status emoji
+                function Get-StatusEmoji($result) {
+                    switch ($result) {
+                        "Succeeded" { return "✅" }
+                        "SucceededWithIssues" { return "⚠️" }
+                        "Failed" { return "❌" }
+                        "Canceled" { return "🚫" }
+                        "Skipped" { return "⏭️" }
+                        default { return "❔" }
+                    }
+                }
+                
+                # Create report directory
+                $reportDir = "$(Build.ArtifactStagingDirectory)/reports"
+                New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+                
+                # Generate Markdown report
+                $reportPath = Join-Path $reportDir "test-report.md"
+                $buildUrl = "$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                
+                $report = @"
+                # Azure Pipeline Templates - Test Report
+                
+                **Build:** [$(Build.BuildNumber)]($buildUrl)  
+                **Date:** $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")  
+                **Branch:** $(Build.SourceBranchName)  
+                **Commit:** $(Build.SourceVersion)  
+                
+                ---
+                
+                ## Test Results Summary
+                
+                | Stage | Status | Result |
+                |-------|--------|--------|
+                | azure-cli.yml Template Tests | $(Get-StatusEmoji $azureCliResult) | $azureCliResult |
+                | use-template-files.yml Tests | $(Get-StatusEmoji $useTemplateFilesResult) | $useTemplateFilesResult |
+                | docker.yml Template Tests | $(Get-StatusEmoji $dockerResult) | $dockerResult |
+                | PowerShell Scripts Tests | $(Get-StatusEmoji $scriptsResult) | $scriptsResult |
+                | Template Accessibility | $(Get-StatusEmoji $accessibilityResult) | $accessibilityResult |
+                
+                ---
+                
+                ## Templates Tested
+                
+                ### ✅ azure-cli.yml
+                **Test Coverage:**
+                - Template structure verification
+                - Required parameters validation (azureSubscription, defaultDisplayName, defaultScriptType, script, environment)
+                - Supported script types verification (bash, ps, pscore, batch)
+                - Script execution simulation
+                - Environment variable handling
+                
+                **Status:** $azureCliResult
+                
+                ### ✅ use-template-files.yml
+                **Test Coverage:**
+                - Repository checkout operations
+                - Variable setup and configuration
+                - Path validation
+                
+                **Status:** $useTemplateFilesResult
+                
+                ### ✅ docker.yml
+                **Test Coverage:**
+                - Template structure verification
+                - Required parameters validation (images, containerRegistry, dockerFile, buildContext, repositoryName)
+                - Parameter validation logic
+                - Error handling for missing parameters
+                
+                **Status:** $dockerResult
+                
+                ### ✅ PowerShell Scripts
+                **Test Coverage:**
+                - Invoke-TestRunner.ps1 execution
+                - Cross-platform compatibility (Windows, Linux, macOS)
+                - Empty test directory handling
+                
+                **Status:** $scriptsResult
+                
+                ### ✅ Template Accessibility
+                **Test Coverage:**
+                - All template files existence verification
+                - File accessibility checks
+                
+                **Status:** $accessibilityResult
+                
+                ---
+                
+                ## Testing Approach
+                
+                This pipeline uses a two-tier testing strategy:
+                
+                1. **Structure Verification**: PowerShell scripts parse and validate template YAML structure, parameters, and required elements
+                2. **Logic Simulation**: Scripts simulate template behavior without external dependencies
+                
+                ### Benefits
+                - ✅ No Azure service connections required
+                - ✅ No Docker environment required
+                - ✅ Cross-platform compatible (Windows, Linux, macOS)
+                - ✅ Reliable and maintainable
+                - ✅ Fast execution
+                
+                ---
+                
+                ## Templates Not Tested
+                
+                The following templates require Azure service connections and are tested in consuming pipelines:
+                - **bicep-deploy.yml** - Requires Azure subscription for Bicep deployments
+                - **run-acceptance-tests.yml** - Requires Azure Key Vault and test environments
+                
+                ---
+                
+                ## Pipeline Information
+                
+                - **Pipeline:** $(Build.DefinitionName)
+                - **Build ID:** $(Build.BuildId)
+                - **Build Number:** $(Build.BuildNumber)
+                - **Agent:** $(Agent.Name)
+                - **Agent OS:** $(Agent.OS)
+                
+                ---
+                
+                *Generated automatically by Azure Pipelines*
+                "@
+                
+                # Write report to file
+                $report | Out-File -FilePath $reportPath -Encoding UTF8
+                
+                Write-Host "##[section]Markdown report generated at: $reportPath"
+                Write-Host ""
+                Write-Host "Report summary:"
+                Write-Host "  - azure-cli.yml: $azureCliResult"
+                Write-Host "  - use-template-files.yml: $useTemplateFilesResult"
+                Write-Host "  - docker.yml: $dockerResult"
+                Write-Host "  - PowerShell scripts: $scriptsResult"
+                Write-Host "  - Template accessibility: $accessibilityResult"
+              pwsh: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Test Report'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/reports'
+              artifact: 'TestReports'
+              publishLocation: 'pipeline'
+
+          - task: PowerShell@2
+            displayName: 'Upload Summary to Extensions Tab'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $reportPath = "$(Build.ArtifactStagingDirectory)/reports/test-report.md"
+                
+                if (Test-Path $reportPath) {
+                    Write-Host "##vso[task.uploadsummary]$reportPath"
+                    Write-Host "##[section]Test report uploaded to Extensions tab"
+                } else {
+                    Write-Host "##[warning]Report file not found at: $reportPath"
+                }
+              pwsh: true
+
+          - task: PowerShell@2
+            displayName: 'Display Console Summary'
             inputs:
               targetType: 'inline'
               script: |
                 Write-Host "##[section]Template Testing Summary"
                 Write-Host ""
-                Write-Host "Templates tested by actual execution:"
+                Write-Host "Templates tested by structure verification:"
                 Write-Host "  ✓ azure-cli.yml - Multiple script types and configurations"
                 Write-Host "  ✓ use-template-files.yml - Repository checkout"
                 Write-Host "  ✓ docker.yml - Parameter validation"
@@ -358,5 +532,5 @@ stages:
                 Write-Host "Note: bicep-deploy.yml and run-acceptance-tests.yml require Azure"
                 Write-Host "      service connections and are tested in consuming pipelines."
                 Write-Host ""
-                Write-Host "All tested templates executed successfully!"
+                Write-Host "📊 Detailed report available in Extensions tab and TestReports artifact"
               pwsh: true
