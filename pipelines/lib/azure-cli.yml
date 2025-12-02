@@ -62,7 +62,7 @@ steps:
       scriptType: ${{ coalesce(parameters.script.type, parameters.defaultScriptType) }}
       scriptLocation: ${{ coalesce(parameters.script.location, 'inlineScript') }}
       ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'scriptPath') }}:
-        ${{ if parameters.script.workingDirectory }}:
+        ${{ if ne(coalesce(parameters.script.workingDirectory, ''), '') }}:
           scriptPath: ${{ parameters.script.workingDirectory }}/${{ parameters.script.script }}
         ${{ else }}:
           scriptPath: ${{ parameters.script.script }}
