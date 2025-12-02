@@ -32,6 +32,7 @@ stages:
   # These tests verify the template structure and parameter handling without actual Azure operations.
   - stage: TestAzureCLI
     displayName: 'Test azure-cli.yml Template'
+    dependsOn: []
     jobs:
       - job: VerifyTemplateStructure
         displayName: 'Verify template structure and parameters'
@@ -126,6 +127,7 @@ stages:
   # Test use-template-files.yml template
   - stage: TestUseTemplateFiles
     displayName: 'Test use-template-files.yml Template'
+    dependsOn: []
     jobs:
       - job: TestCheckout
         displayName: 'Test repository checkout'
@@ -150,6 +152,7 @@ stages:
   # These tests verify the template's parameter validation logic.
   - stage: TestDocker
     displayName: 'Test docker.yml Template'
+    dependsOn: []
     jobs:
       - job: VerifyTemplateStructure
         displayName: 'Verify template structure'
@@ -245,6 +248,7 @@ stages:
   # Test PowerShell scripts used by templates
   - stage: TestScripts
     displayName: 'Test PowerShell Scripts'
+    dependsOn: []
     jobs:
       - job: TestInvokeTestRunner
         displayName: 'Test Invoke-TestRunner.ps1'
@@ -301,6 +305,7 @@ stages:
   # Integration test: Verify all templates are accessible
   - stage: VerifyTemplateAccessibility
     displayName: 'Verify All Templates Are Accessible'
+    dependsOn: []
     jobs:
       - job: ListTemplates
         displayName: 'List and verify all templates'
