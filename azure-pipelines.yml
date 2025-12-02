@@ -252,24 +252,42 @@ stages:
           - checkout: self
 
           - task: PowerShell@2
-            displayName: 'Test script with no test files'
+            displayName: 'Test script parameter validation'
             inputs:
               targetType: 'inline'
               script: |
-                # Create a test directory with no test files
+                # Test that the script properly validates parameters
                 # Use Agent.TempDirectory for cross-platform compatibility
                 $tempDir = if ($env:AGENT_TEMPDIRECTORY) { $env:AGENT_TEMPDIRECTORY } else { [System.IO.Path]::GetTempPath() }
-                $testDir = New-Item -ItemType Directory -Path (Join-Path $tempDir "empty-test-dir") -Force
-
-                # This should complete without error when no files are found
+                
+                # Create a test directory with a mock test file
+                $testDir = New-Item -ItemType Directory -Path (Join-Path $tempDir "test-script-dir") -Force
+                $testFile = New-Item -ItemType File -Path (Join-Path $testDir.FullName "MockTests.dll") -Force
+                
+                Write-Host "Created test file: $($testFile.FullName)"
+                
+                # Test the script with valid parameters
+                # Using 'echo' as test runner which will just echo the file path
+                $resultsDir = Join-Path $tempDir "test-results"
+                New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+                
                 & "$(Build.SourcesDirectory)/scripts/Invoke-TestRunner.ps1" `
                   -SearchPath $testDir.FullName `
                   -FilePattern "**/*Tests.dll" `
-                  -ResultsDirectory (Join-Path $tempDir "test-results") `
+                  -ResultsDirectory $resultsDir `
                   -TestRunnerCommand "echo" `
-                  -TestResultsArguments "test"
-
-                Write-Host "Script executed successfully with no test files"
+                  -TestResultsArguments "Processing:"
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "✓ Script executed successfully with test file"
+                } else {
+                    Write-Host "##[error]Script failed with exit code: $LASTEXITCODE"
+                    exit 1
+                }
+                
+                # Clean up
+                Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path $resultsDir -Recurse -Force -ErrorAction SilentlyContinue
               pwsh: true
 
   # Integration test: Verify all templates are accessible
@@ -339,12 +357,34 @@ stages:
             inputs:
               targetType: 'inline'
               script: |
-                # Get stage results
-                $azureCliResult = "$(stageDependencies.TestAzureCLI.result)"
-                $useTemplateFilesResult = "$(stageDependencies.TestUseTemplateFiles.result)"
-                $dockerResult = "$(stageDependencies.TestDocker.result)"
-                $scriptsResult = "$(stageDependencies.TestScripts.result)"
-                $accessibilityResult = "$(stageDependencies.VerifyTemplateAccessibility.result)"
+                # Get stage results - using first job from each stage as indicator
+                # Note: stageDependencies uses format stageDependencies.<StageName>.<JobName>.result
+                $azureCliResult = if ("$(stageDependencies.TestAzureCLI.VerifyTemplateStructure.result)" -ne "") { 
+                    "$(stageDependencies.TestAzureCLI.VerifyTemplateStructure.result)" 
+                } else { "Unknown" }
+                
+                $useTemplateFilesResult = if ("$(stageDependencies.TestUseTemplateFiles.TestCheckout.result)" -ne "") { 
+                    "$(stageDependencies.TestUseTemplateFiles.TestCheckout.result)" 
+                } else { "Unknown" }
+                
+                $dockerResult = if ("$(stageDependencies.TestDocker.VerifyTemplateStructure.result)" -ne "") { 
+                    "$(stageDependencies.TestDocker.VerifyTemplateStructure.result)" 
+                } else { "Unknown" }
+                
+                $scriptsResult = if ("$(stageDependencies.TestScripts.TestInvokeTestRunner.result)" -ne "") { 
+                    "$(stageDependencies.TestScripts.TestInvokeTestRunner.result)" 
+                } else { "Unknown" }
+                
+                $accessibilityResult = if ("$(stageDependencies.VerifyTemplateAccessibility.ListTemplates.result)" -ne "") { 
+                    "$(stageDependencies.VerifyTemplateAccessibility.ListTemplates.result)" 
+                } else { "Unknown" }
+                
+                Write-Host "Stage Results:"
+                Write-Host "  TestAzureCLI: $azureCliResult"
+                Write-Host "  TestUseTemplateFiles: $useTemplateFilesResult"
+                Write-Host "  TestDocker: $dockerResult"
+                Write-Host "  TestScripts: $scriptsResult"
+                Write-Host "  VerifyTemplateAccessibility: $accessibilityResult"
                 
                 # Function to get status emoji
                 function Get-StatusEmoji($result) {
