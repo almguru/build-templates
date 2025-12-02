@@ -61,7 +61,13 @@ steps:
       azureSubscription: '${{ parameters.azureSubscription }}'
       scriptType: ${{ coalesce(parameters.script.type, parameters.defaultScriptType) }}
       scriptLocation: ${{ coalesce(parameters.script.location, 'inlineScript') }}
-      ${{ coalesce(parameters.script.location, 'inlineScript') }}: ${{ parameters.script.script }}
+      ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'scriptPath') }}:
+        ${{ if ne(coalesce(parameters.script.workingDirectory, ''), '') }}:
+          scriptPath: ${{ parameters.script.workingDirectory }}/${{ parameters.script.script }}
+        ${{ else }}:
+          scriptPath: ${{ parameters.script.script }}
+      ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'inlineScript') }}:
+        inlineScript: ${{ parameters.script.script }}
       ${{ if parameters.script.arguments }}:
         arguments: '${{ parameters.script.arguments }}'
       workingDirectory: ${{ coalesce(parameters.script.workingDirectory, '$(System.DefaultWorkingDirectory)') }}

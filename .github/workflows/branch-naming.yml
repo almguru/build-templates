@@ -10,16 +10,6 @@ on:
 jobs:
   check-branch-naming:
     runs-on: ubuntu-latest
-    steps:
-      - name: Check branch naming convention
-        env:
-          BRANCH_NAME: ${{ github.head_ref }}
-        run: |
-          echo "Checking branch name: $BRANCH_NAME"
-
-          # Define allowed branch prefixes
-          allowed_prefixes="^(features|bugfix|hotfix|docs|chore)/"
-
     env:
       ALLOWED_PREFIXES: "^(features|bugfix|hotfix|docs|chore)/"
     steps:
