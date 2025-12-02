@@ -273,7 +273,7 @@ stages:
                 
                 & "$(Build.SourcesDirectory)/scripts/Invoke-TestRunner.ps1" `
                   -SearchPath $testDir.FullName `
-                  -FilePattern "**/*Tests.dll" `
+                  -FilePattern "*Tests.dll" `
                   -ResultsDirectory $resultsDir `
                   -TestRunnerCommand "echo" `
                   -TestResultsArguments "Processing:"
