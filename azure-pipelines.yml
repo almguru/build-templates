@@ -301,11 +301,6 @@ stages:
   # Integration test: Verify all templates are accessible
   - stage: VerifyTemplateAccessibility
     displayName: 'Verify All Templates Are Accessible'
-    dependsOn:
-      - TestAzureCLI
-      - TestUseTemplateFiles
-      - TestDocker
-      - TestScripts
     jobs:
       - job: ListTemplates
         displayName: 'List and verify all templates'
