@@ -357,27 +357,20 @@ stages:
             inputs:
               targetType: 'inline'
               script: |
-                # Get stage results - using first job from each stage as indicator
-                # Note: stageDependencies uses format stageDependencies.<StageName>.<JobName>.result
-                $azureCliResult = if ("$(stageDependencies.TestAzureCLI.VerifyTemplateStructure.result)" -ne "") { 
-                    "$(stageDependencies.TestAzureCLI.VerifyTemplateStructure.result)" 
-                } else { "Unknown" }
+                # Get stage results - using environment variables set by Azure Pipelines
+                # Azure Pipelines automatically converts stageDependencies to environment variables
+                $azureCliResult = $env:STAGEDEPENDENCIES_TESTAZURECLI_VERIFYTEMPLATESTRUCTURE_RESULT
+                $useTemplateFilesResult = $env:STAGEDEPENDENCIES_TESTUSETEMPLATEFILES_TESTCHECKOUT_RESULT
+                $dockerResult = $env:STAGEDEPENDENCIES_TESTDOCKER_VERIFYTEMPLATESTRUCTURE_RESULT
+                $scriptsResult = $env:STAGEDEPENDENCIES_TESTSCRIPTS_TESTINVOKETESTRUNNER_RESULT
+                $accessibilityResult = $env:STAGEDEPENDENCIES_VERIFYTEMPLATEACCESSIBILITY_LISTTEMPLATES_RESULT
                 
-                $useTemplateFilesResult = if ("$(stageDependencies.TestUseTemplateFiles.TestCheckout.result)" -ne "") { 
-                    "$(stageDependencies.TestUseTemplateFiles.TestCheckout.result)" 
-                } else { "Unknown" }
-                
-                $dockerResult = if ("$(stageDependencies.TestDocker.VerifyTemplateStructure.result)" -ne "") { 
-                    "$(stageDependencies.TestDocker.VerifyTemplateStructure.result)" 
-                } else { "Unknown" }
-                
-                $scriptsResult = if ("$(stageDependencies.TestScripts.TestInvokeTestRunner.result)" -ne "") { 
-                    "$(stageDependencies.TestScripts.TestInvokeTestRunner.result)" 
-                } else { "Unknown" }
-                
-                $accessibilityResult = if ("$(stageDependencies.VerifyTemplateAccessibility.ListTemplates.result)" -ne "") { 
-                    "$(stageDependencies.VerifyTemplateAccessibility.ListTemplates.result)" 
-                } else { "Unknown" }
+                # Set to Unknown if empty
+                if ([string]::IsNullOrEmpty($azureCliResult)) { $azureCliResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($useTemplateFilesResult)) { $useTemplateFilesResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($dockerResult)) { $dockerResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($scriptsResult)) { $scriptsResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($accessibilityResult)) { $accessibilityResult = "Unknown" }
                 
                 Write-Host "Stage Results:"
                 Write-Host "  TestAzureCLI: $azureCliResult"
