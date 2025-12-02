@@ -267,21 +267,29 @@ stages:
                 Write-Host "Created test file: $($testFile.FullName)"
                 
                 # Test the script with valid parameters
-                # Using 'echo' as test runner which will just echo the file path
+                # Using 'pwsh -Command exit 0' as test runner which always succeeds
                 $resultsDir = Join-Path $tempDir "test-results"
                 New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
                 
-                & "$(Build.SourcesDirectory)/scripts/Invoke-TestRunner.ps1" `
-                  -SearchPath $testDir.FullName `
-                  -FilePattern "*Tests.dll" `
-                  -ResultsDirectory $resultsDir `
-                  -TestRunnerCommand "echo" `
-                  -TestResultsArguments "Processing:"
-                
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "✓ Script executed successfully with test file"
-                } else {
-                    Write-Host "##[error]Script failed with exit code: $LASTEXITCODE"
+                try {
+                    & "$(Build.SourcesDirectory)/scripts/Invoke-TestRunner.ps1" `
+                      -SearchPath $testDir.FullName `
+                      -FilePattern "*Tests.dll" `
+                      -ResultsDirectory $resultsDir `
+                      -TestRunnerCommand "pwsh" `
+                      -TestResultsArguments "-Command", "exit 0"
+                    
+                    $exitCode = $LASTEXITCODE
+                    if ($null -eq $exitCode) { $exitCode = 0 }
+                    
+                    if ($exitCode -eq 0) {
+                        Write-Host "✓ Script executed successfully with test file"
+                    } else {
+                        Write-Host "##[error]Script failed with exit code: $exitCode"
+                        exit 1
+                    }
+                } catch {
+                    Write-Host "##[error]Script execution threw exception: $_"
                     exit 1
                 }
                 
