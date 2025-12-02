@@ -277,7 +277,7 @@ stages:
                       -FilePattern "*Tests.dll" `
                       -ResultsDirectory $resultsDir `
                       -TestRunnerCommand "pwsh" `
-                      -TestResultsArguments "-Command", "exit 0"
+                      -TestResultsArguments '-Command "exit 0"'
                     
                     $exitCode = $LASTEXITCODE
                     if ($null -eq $exitCode) { $exitCode = 0 }
