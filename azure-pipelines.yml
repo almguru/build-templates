@@ -17,21 +17,11 @@ trigger:
   branches:
     include:
       - main
-  paths:
-    include:
-      - pipelines/lib/*.yml
-      - scripts/*.ps1
-      - azure-pipelines.yml
 
 pr:
   branches:
     include:
       - main
-  paths:
-    include:
-      - pipelines/lib/*.yml
-      - scripts/*.ps1
-      - azure-pipelines.yml
 
 pool:
   vmImage: 'ubuntu-latest'
