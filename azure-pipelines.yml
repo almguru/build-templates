@@ -267,13 +267,15 @@ stages:
               targetType: 'inline'
               script: |
                 # Create a test directory with no test files
-                $testDir = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "empty-test-dir") -Force
+                # Use Agent.TempDirectory for cross-platform compatibility
+                $tempDir = if ($env:AGENT_TEMPDIRECTORY) { $env:AGENT_TEMPDIRECTORY } else { [System.IO.Path]::GetTempPath() }
+                $testDir = New-Item -ItemType Directory -Path (Join-Path $tempDir "empty-test-dir") -Force
 
                 # This should complete without error when no files are found
                 & "$(Build.SourcesDirectory)/scripts/Invoke-TestRunner.ps1" `
                   -SearchPath $testDir.FullName `
                   -FilePattern "**/*Tests.dll" `
-                  -ResultsDirectory (Join-Path $env:TEMP "test-results") `
+                  -ResultsDirectory (Join-Path $tempDir "test-results") `
                   -TestRunnerCommand "echo" `
                   -TestResultsArguments "test"
 
