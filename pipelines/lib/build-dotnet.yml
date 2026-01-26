@@ -1,0 +1,298 @@
+# Description: This template orchestrates the complete .NET build lifecycle including:
+#   - NuGet and .NET tooling installation
+#   - Package restoration with configurable feeds
+#   - Build and publish operations
+#   - Unit testing with code coverage reporting
+#   - Code signing with Azure Key Vault certificate support
+#   - Symbol publishing and artifact staging
+#   - Optional NuGet package publishing
+#
+# This template supports both build and publish actions with extensive customization
+# through parameters for build configuration, versioning, testing, and deployment.
+#
+# Parameter Examples:
+#   # Basic build
+#   buildAction: 'build'
+#   buildSpec: 'src/MyApp.csproj'
+#   testSpec: 'tests/MyApp.Tests.csproj'
+#
+#   # Build and publish with NuGet packages
+#   buildAction: 'publish'
+#   buildSpec: 'src/MyApp.sln'
+#   testSpec: 'tests/MyApp.*.Tests.csproj'
+#   publishNuGetPackages: true
+#   nuGetPackagesPublishingFilter: '**/*.nupkg\n!/**/*.symbols.nupkg'
+#   zipAfterPublish: true
+#
+#   # Build with code signing
+#   signFiles: '**/*.exe|**/*.dll'
+#   codeSigningServiceConnection: 'azure-key-vault-connection'
+#   codeSigningKeyVaultName: 'my-keyvault'
+#   codeSigningCertificateSecretName: 'CodeSigningCert'
+#
+#   # Build with custom feed and arguments
+#   feedsToUse: 'select'
+#   vstsFeed: 'my-custom-feed'
+#   buildAdditionalArguments: '--property:TreatWarningsAsErrors=true'
+#
+#   # Build with test hooks
+#   beforeTestsSteps:
+#     - script: docker run --name test-db -d postgres:latest
+#       displayName: 'Start Test Database'
+#   unitTestArguments: '--filter Category=Unit'
+#
+# Usage:
+#   Include this template in your pipeline to build and test .NET projects with
+#   comprehensive support for versioning, code signing, and artifact management.
+#
+
+parameters:
+  # Action to perform: 'build' (compile only) or 'publish' (compile and package for deployment)
+  - name: buildAction
+    type: string
+    default: 'build'
+    values:
+      - 'build'
+      - 'publish'
+
+  # NuGet feed strategy: 'none' (no restore), 'config' (nuget.config), or 'select' (specific VSTS feed)
+  - name: feedsToUse
+    type: string
+    default: 'none'
+    values:
+      - 'none'
+      - 'config'
+      - 'select'
+
+  # VSTS feed name to use for package restoration when feedsToUse is 'select'
+  - name: vstsFeed
+    type: string
+    default: 'innersource'
+
+  # Whether to zip published output folders
+  - name: zipAfterPublish
+    type: boolean
+    default: true
+
+  # Custom steps to execute before build
+  - name: beforeBuildSteps
+    type: stepList
+    default: []
+
+  # Custom steps to execute before publish
+  - name: beforePublishSteps
+    type: stepList
+    default: []
+
+  # Custom steps to execute before running tests
+  - name: beforeTestsSteps
+    type: stepList
+    default: []
+
+  # File glob pattern for files to sign (e.g., '**/*.exe', '**/*.dll'). Leave empty to skip signing
+  - name: signFiles
+    type: string
+    default: ''
+
+  # Whether to publish .nupkg packages as pipeline artifacts
+  - name: publishNuGetPackages
+    type: boolean
+    default: false
+
+  # Glob pattern for NuGet packages to publish
+  - name: nuGetPackagesPublishingFilter
+    type: string
+    default: |
+      **/*.nupkg
+      !/**/*.symbols.nupkg
+
+  # Subfolder within artifact staging directory for NuGet packages
+  - name: nuGetPackagesDeploymentFolder
+    type: string
+    default: 'packages'
+
+  # .NET SDK version to install
+  - name: versionSpec
+    type: string
+    default: '10.x'
+
+  # NuGet tool version to install
+  - name: nuGetVersionSpec
+    type: string
+    default: '7.x'
+
+  # What to build - [<PROJECT | SOLUTION | FILE>...]
+  - name: buildSpec
+    type: string
+    default: ''
+
+  # What to test - [--project <PROJECT_PATH> | --solution <SOLUTION_PATH>]
+  - name: testSpec
+    type: string
+    default: ''
+
+  # Additional argument to skip restore during build if restore was already performed
+  - name: buildNoRestoreArgument
+    type: string
+    default: ''
+
+  # Build configuration (Debug or Release)
+  - name: buildConfiguration
+    type: string
+    default: 'Release'
+
+  # MSBuild properties for version injection during build. Uses GitVersion task variables
+  - name: buildVersionProperties
+    type: string
+    default: 'Version=$(GitVersion_SemVer);PackageVersion=$(GitVersion_SemVer);AssemblyVersion=$(GitVersion_AssemblySemVer);FileVersion=$(GitVersion_AssemblySemFileVer);InformationalVersion=$(GitVersion_InformationalVersion)'
+
+  # Additional arguments to pass to dotnet build/publish commands
+  - name: buildAdditionalArguments
+    type: string
+    default: ''
+
+  # Additional arguments to pass to dotnet test command
+  - name: unitTestArguments
+    type: string
+    default: ''
+
+  # Subfolder within artifact staging directory where build outputs will be copied
+  - name: deploymentFolder
+    type: string
+    default: 'app'
+
+  # Azure service connection name for accessing the code signing certificate Key Vault
+  - name: codeSigningServiceConnection
+    type: string
+    default: ''
+
+  # Name of the Azure Key Vault containing the code signing certificate
+  - name: codeSigningKeyVaultName
+    type: string
+    default: ''
+
+  # Name of the Key Vault secret containing the base64-encoded code signing certificate
+  - name: codeSigningCertificateSecretName
+    type: string
+    default: ''
+
+steps:
+  - task: NuGetToolInstaller@1
+    displayName: 'Install NuGet ${{ parameters.nuGetVersionSpec }}'
+    inputs:
+      versionSpec: '${{ parameters.nuGetVersionSpec }}'
+
+  - task: UseDotNet@2
+    displayName: 'Install .Net ${{ parameters.versionSpec }}'
+    inputs:
+      version: '${{ parameters.versionSpec }}'
+
+  - ${{ if ne(parameters.feedsToUse, 'none') }}:
+      - task: DotNetCoreCLI@2
+        displayName: '.Net restore'
+        inputs:
+          command: 'restore'
+          projects: ${{ parameters.buildSpec }}
+          feedsToUse: ${{ parameters.feedsToUse }}
+          vstsFeed: ${{ parameters.vstsFeed }}
+
+  - ${{ parameters.beforeBuildSteps }}
+
+  - script: |
+      echo "##[command]dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
+      dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+    displayName: '.Net build'
+
+  - ${{ if eq(parameters.buildAction, 'publish') }}:
+      - ${{ parameters.beforePublishSteps }}
+
+      - script: |
+          echo "##[command]dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
+          dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+        displayName: '.Net publish'
+
+  - ${{ if parameters.zipAfterPublish }}:
+      - powershell: |
+          [Reflection.Assembly]::LoadWithPartialName( "System.IO.Compression.FileSystem" ) | Out-Null
+          Get-ChildItem -Path '$(Build.BinariesDirectory)/publish' -Directory | ForEach-Object {
+              $filesToCompress = Join-Path -Path $_.FullName -ChildPath "${{ parameters.buildConfiguration }}".ToLower()
+              $zipFileName = "$($_.FullName).zip"
+              Remove-Item -Path $zipFileName -Force -ErrorAction SilentlyContinue
+              [System.IO.Compression.ZipFile]::CreateFromDirectory($filesToCompress, $zipFileName)
+              Remove-Item -Path $_.FullName -Recurse -Force
+          }
+        displayName: 'Zip publish folders'
+
+  - ${{ parameters.beforeTestsSteps }}
+
+  - script: |
+      echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}"
+      dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}
+    displayName: '.Net test'
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testRunTitle: 'Unit tests (.Net)'
+      searchFolder: '$(Agent.TempDirectory)'
+      testResultsFormat: 'VSTest'
+      testResultsFiles: '**/*.trx'
+      mergeTestResults: true
+      failTaskOnMissingResultsFiles: true
+      failTaskOnFailedTests: true
+      failTaskOnFailureToPublishResults: true
+      publishRunAttachments: true
+    displayName: 'Publish unit tests results'
+
+  - ${{ if ne(parameters.signFiles, '') }}:
+      - task: AzureKeyVault@1
+        displayName: 'Get code signing certificate from Azure Key Vault'
+        inputs:
+          azureSubscription: '${{ parameters.codeSigningServiceConnection }}'
+          KeyVaultName: '${{ parameters.codeSigningKeyVaultName }}'
+          SecretsFilter: '*'
+          RunAsPreJob: false
+
+      - powershell: |
+          $kvSecretBytes = [System.Convert]::FromBase64String("$(${{ parameters.codeSigningCertificateSecretName }})")
+          $certCollection = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+          $certCollection.Import($kvSecretBytes, $null, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          $signingCerts = $certCollection.Find([System.Security.Cryptography.X509Certificates.X509FindType]::FindByKeyUsage, [System.Security.Cryptography.X509Certificates.X509KeyUsageFlags]::DigitalSignature, $false)
+          $codeSigningCerts = $signingCerts | Where-Object { ($_.Extensions | Where-Object { $_.CertificateAuthority }).Count -eq 0 }
+
+          if ($codeSigningCerts.Count -eq 1) {
+              Get-ChildItem -Path '$(Build.BinariesDirectory)/*' -Include ${{ parameters.signFiles }} -Recurse | ForEach-Object {
+                  Write-Host "##[command]Set-AuthenticodeSignature -FilePath $_ -Certificate '****' -IncludeChain All -TimestampServer http://timestamp.digicert.com -Verbose | Format-List"
+                  Set-AuthenticodeSignature -FilePath "$_" -Certificate $codeSigningCerts[0] -IncludeChain All -TimestampServer http://timestamp.digicert.com -Verbose | Format-List
+              }
+          }
+          else {
+              Write-Error "No code signing certificate found in the certificates collection." -ErrorAction Stop
+          }
+        displayName: 'Signing files'
+
+  - task: PublishSymbols@2
+    displayName: 'Publish symbols'
+    inputs:
+      searchPattern: '**/*.pdb'
+      symbolsFolder: '$(Build.BinariesDirectory)'
+      symbolServerType: 'TeamServices'
+
+  - task: CopyFiles@2
+    displayName: 'Copy binary files to staging directory'
+    inputs:
+      SourceFolder: '$(Build.BinariesDirectory)'
+      Contents: |
+        **/*
+        !**/*.pdb
+        !**/*.nupkg
+        !**/obj/**
+      TargetFolder: '$(Build.ArtifactStagingDirectory)/${{ parameters.deploymentFolder }}'
+
+  - ${{ if parameters.publishNuGetPackages }}:
+      - task: CopyFiles@2
+        displayName: 'Copy NuGet packages to staging directory'
+        inputs:
+          SourceFolder: '$(Build.BinariesDirectory)'
+          Contents: ${{ parameters.nuGetPackagesPublishingFilter }}
+          TargetFolder: '$(Build.ArtifactStagingDirectory)/${{ parameters.nuGetPackagesDeploymentFolder }}'
