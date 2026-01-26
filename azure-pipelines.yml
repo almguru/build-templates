@@ -263,18 +263,14 @@ stages:
               mkdir -p "$work_dir"
               cd "$work_dir"
 
-              dotnet new sln -n Sample -o .
-              dotnet new classlib -n Sample -f net8.0 -o ./Sample
-              dotnet new xunit -n Sample.Tests -f net8.0 -o ./Sample.Tests
-              dotnet sln Sample.sln add Sample/Sample.csproj Sample.Tests/Sample.Tests.csproj
-              dotnet add Sample.Tests/Sample.Tests.csproj reference Sample/Sample.csproj
-            displayName: 'Create sample .NET solution'
+              dotnet new xunit -n Sample.Tests -f net10.0
+            displayName: 'Create sample test project'
 
           - template: pipelines/lib/build-dotnet.yml
             parameters:
-              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.sln'
+              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.Tests.csproj'
               testSpec: '**/Sample.Tests.dll'
-              versionSpec: '9.x'
+              versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
               buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
