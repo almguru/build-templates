@@ -255,6 +255,8 @@ stages:
         displayName: 'Run template against sample project'
         steps:
           - checkout: self
+            fetchDepth: 0 # Shallow Clone disabled to work with complicated branch structures
+            path: 's' # Force checkout to the 's' folder to allow multiple `- checkout:` steps in calling pipelines
 
           - task: gitversion-setup@4
             displayName: 'Install GitVersion'
