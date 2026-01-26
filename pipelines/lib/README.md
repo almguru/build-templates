@@ -455,7 +455,7 @@ Template for checking out template repository files to make scripts and resource
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `repositoryResourceName` | string | `'almguru-templates'` | Repository resource name to checkout |
-| `repositoryLocalPath` | string | `'almguru-templates'` | Local path for checked out files |
+| `repositoryLocalPath` | string | `''` (falls back to `repositoryResourceName`) | Local path for checked out files |
 
 ### Features
 

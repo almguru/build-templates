@@ -10,18 +10,8 @@ on:
 jobs:
   check-branch-naming:
     runs-on: ubuntu-latest
-    steps:
-      - name: Check branch naming convention
-        env:
-          BRANCH_NAME: ${{ github.head_ref }}
-        run: |
-          echo "Checking branch name: $BRANCH_NAME"
-
-          # Define allowed branch prefixes
-          allowed_prefixes="^(features|bugfix|hotfix|docs|chore)/"
-
     env:
-      ALLOWED_PREFIXES: "^(features|bugfix|hotfix|docs|chore)/"
+      ALLOWED_PREFIXES: "^(features|bugfix|hotfix|copilot)/"
     steps:
       - name: Check branch naming convention
         env:
@@ -41,8 +31,7 @@ jobs:
             echo "  - features/your-feature-name"
             echo "  - bugfix/your-bug-fix"
             echo "  - hotfix/your-hotfix"
-            echo "  - docs/your-documentation-update"
-            echo "  - chore/your-maintenance-task"
+            echo "  - copilot/your-copilot-edits"
             echo ""
             echo "Example: features/add-user-authentication"
             echo ""
@@ -73,8 +62,7 @@ jobs:
               - \`features/\` - for new features
               - \`bugfix/\` - for bug fixes  
               - \`hotfix/\` - for urgent fixes
-              - \`docs/\` - for documentation updates
-              - \`chore/\` - for maintenance tasks
+              - \`copilot/\` - for copilot updates
               
               ### Example
               \`\`\`bash

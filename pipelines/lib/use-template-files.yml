@@ -13,13 +13,13 @@ parameters:
 
   - name: repositoryLocalPath
     type: string
-    default: 'almguru-templates'
+    default: ''
 
 steps:
   - checkout: ${{ parameters.repositoryResourceName }}
-    path: ${{ parameters.repositoryLocalPath }}
+    path: ${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}
     displayName: 'Checkout template resources'
 
   - pwsh: |
-      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)/${{ parameters.repositoryLocalPath }}"
+      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)$([System.IO.Path]::DirectorySeparatorChar)${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}"
     displayName: 'Set template resources path variable'
