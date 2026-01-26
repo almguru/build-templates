@@ -36,11 +36,12 @@ Set-Location $WorkDir
 Write-Host "Current directory: $(Get-Location)"
 
 Write-Host ""
-Write-Host "📦 Creating xUnit test project (.NET 8.0)..."
-& dotnet new xunit -n Sample.Tests -f net8.0
+Write-Host "📦 Creating xUnit test project (.NET 10.0)..."
+& dotnet new xunit -n Sample.Tests -f net10.0
 
 Write-Host ""
-Write-Host "📂 Project structure:"
+Write-Host "📚 Adding Microsoft.Testing.Platform packages..."
+& dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform
 Get-ChildItem -Path Sample.Tests -Recurse | Select-Object -First 10
 
 Write-Host ""
