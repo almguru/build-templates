@@ -20,5 +20,6 @@
     "sonarlint.connectedMode.project": {
         "connectionId": "almguru",
         "projectKey": "almguru_build-templates"
-    }
+    },
+    "sarif-viewer.connectToGithubCodeScanning": "on"
 }

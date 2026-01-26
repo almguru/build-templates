@@ -6,6 +6,7 @@ This directory contains reusable Azure DevOps YAML pipeline templates for common
 
 | Template | Purpose | Key Features |
 |----------|---------|--------------|
+| [build-dotnet.yml](#build-dotnet-template) | Build, test, and publish .NET projects | Multi-framework support, code signing, test coverage reporting |
 | [azure-cli.yml](#azure-cli-template) | Execute Azure CLI commands | Multi-script support, configurable environments |
 | [bicep-deploy.yml](#bicep-deploy-template) | Deploy Azure Bicep templates | Multi-scope deployment, automatic output variables |
 | [docker.yml](#docker-build-template) | Build and push Docker images | Multi-image support, configurable registries |
@@ -24,6 +25,140 @@ resources:
     name: almguru/build-templates
     endpoint: MyGitHubServiceConnection
     ref: main
+```
+
+## Build .NET Template
+
+**Location:** `pipelines/lib/build-dotnet.yml`
+
+A comprehensive template for building, testing, publishing, and packaging .NET projects with support for multi-framework scenarios, code signing, coverage reporting, and artifact staging.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `buildAction` | string | `'build'` | Action to perform: `build` (compile only) or `publish` (compile and package for deployment) |
+| `buildSpec` | string | `''` | Project or solution file(s) to build. Supports wildcards and multiple projects |
+| `buildConfiguration` | string | `'Release'` | Build configuration (`Debug` or `Release`) |
+| `buildAdditionalArguments` | string | `''` | Additional arguments passed to `dotnet build/publish` commands |
+| `buildNoRestoreArgument` | string | `''` | Arguments to skip restore if already performed |
+| `buildVersionProperties` | string | `'Version=$(GitVersion_SemVer);...'` | MSBuild properties for versioning. Uses GitVersion variables |
+| `feedsToUse` | string | `'none'` | NuGet feed strategy: `none` (no restore), `config` (nuget.config), `select` (specific VSTS feed) |
+| `vstsFeed` | string | `'innersource'` | VSTS feed name when `feedsToUse` is `'select'` |
+| `testSpec` | string | `''` | Glob pattern to locate compiled test assemblies in artifacts (e.g., `'**/*Tests.dll'`, `'**/bin/Release/**/*Tests.dll'`) |
+| `unitTestArguments` | string | `''` | Additional arguments for `dotnet test` command |
+| `beforeTestsSteps` | stepList | `[]` | Custom steps to execute before running tests |
+| `zipAfterPublish` | boolean | `true` | Whether to zip published output folders |
+| `deploymentFolder` | string | `'app'` | Subfolder within artifact staging directory for deployment artifacts |
+| `beforePublishSteps` | stepList | `[]` | Custom steps to execute before publish |
+| `publishNuGetPackages` | boolean | `false` | Whether to publish .nupkg packages as artifacts |
+| `nuGetPackagesPublishingFilter` | string | `'**/*.nupkg\n!/**/*.symbols.nupkg'` | Glob pattern for packages to publish |
+| `nuGetPackagesDeploymentFolder` | string | `'packages'` | Subfolder within artifact staging directory for NuGet packages |
+| `signFiles` | string | `''` | File glob pattern for files to sign. Leave empty to skip signing |
+| `codeSigningServiceConnection` | string | `''` | Azure service connection for Key Vault access |
+| `codeSigningKeyVaultName` | string | `''` | Azure Key Vault name containing signing certificate |
+| `codeSigningCertificateSecretName` | string | `''` | Key Vault secret name containing the base64-encoded certificate |
+| `versionSpec` | string | `'10.x'` | .NET SDK version to install |
+| `nuGetVersionSpec` | string | `'7.x'` | NuGet tool version to install |
+| `beforeBuildSteps` | stepList | `[]` | Custom steps to execute before build |
+
+### Features
+
+- **Multi-Action Support:** Build-only or build+publish workflows
+- **Flexible Feed Management:** Support for multiple NuGet feed strategies
+- **Code Coverage:** Automatic code coverage collection in Cobertura format
+- **Code Signing:** Optional Authenticode signing with Azure Key Vault integration
+- **Symbol Publishing:** Automatic PDB publishing to symbol server
+- **Artifact Organization:** Structured artifact staging with separate folders for binaries and packages
+- **Test Publishing:** Automatic test results publishing in VSTest format
+- **Extensibility:** Before/after hooks at critical pipeline stages
+- **Version Management:** GitVersion integration for semantic versioning
+
+### Usage Examples
+
+#### Basic Build
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildSpec: 'src/MyApp.csproj'
+    testSpec: '**/*Tests.dll'
+```
+
+#### Build and Publish with NuGet Packages
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildAction: 'publish'
+    buildSpec: 'src/MyApp.sln'
+    testSpec: '**/bin/Release/**/*Tests.dll'
+    publishNuGetPackages: true
+    zipAfterPublish: true
+```
+
+#### Build with Code Signing
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildSpec: 'src/MyApp.csproj'
+    buildConfiguration: 'Release'
+    signFiles: '**/*.exe|**/*.dll'
+    codeSigningServiceConnection: 'azure-key-vault-connection'
+    codeSigningKeyVaultName: 'my-keyvault'
+    codeSigningCertificateSecretName: 'CodeSigningCert'
+```
+
+#### Build with Custom Feed and Build Arguments
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildSpec: 'src/MyApp.sln'
+    feedsToUse: 'select'
+    vstsFeed: 'my-custom-feed'
+    buildConfiguration: 'Release'
+    buildAdditionalArguments: '--property:TreatWarningsAsErrors=true'
+    testSpec: '**/bin/Release/**/*Tests.dll'
+    unitTestArguments: '--filter Category=Unit'
+```
+
+#### Build with Test Hooks
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildSpec: 'src/**/*.csproj'
+    testSpec: '**/*Tests.dll'
+    unitTestArguments: '--filter Category!=Integration'
+    beforeTestsSteps:
+      - script: |
+          echo "Preparing test environment"
+          docker run --name test-db -d postgres:latest
+        displayName: 'Start Test Database'
+```
+
+#### Full CI/CD Pipeline with Code Signing and Publishing
+
+```yaml
+- template: pipelines/lib/build-dotnet.yml@almguru-templates
+  parameters:
+    buildAction: 'publish'
+    buildSpec: 'src/MyApp.sln'
+    buildConfiguration: 'Release'
+    versionSpec: '9.x'
+    feedsToUse: 'select'
+    vstsFeed: 'innersource'
+    testSpec: '**/bin/Release/**/*Tests.dll'
+    signFiles: '**/*.exe'
+    codeSigningServiceConnection: 'AzureKeyVaultConnection'
+    codeSigningKeyVaultName: 'my-keyvault'
+    codeSigningCertificateSecretName: 'CodeSigningCert'
+    publishNuGetPackages: true
+    zipAfterPublish: true
+    deploymentFolder: 'app'
+    nuGetPackagesDeploymentFolder: 'packages'
 ```
 
 ## Azure CLI Template

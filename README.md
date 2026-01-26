@@ -32,6 +32,7 @@ These templates are designed to be reusable across multiple projects and provide
 
 | Template | Purpose | Documentation |
 |----------|---------|--------------|
+| `build-dotnet.yml` | Build, test, and publish .NET projects | [View Details](pipelines/lib/README.md#build-dotnet-template) |
 | `azure-cli.yml` | Execute Azure CLI commands | [View Details](pipelines/lib/README.md#azure-cli-template) |
 | `bicep-deploy.yml` | Deploy Azure Bicep templates | [View Details](pipelines/lib/README.md#bicep-deploy-template) |
 | `docker.yml` | Build and push Docker images | [View Details](pipelines/lib/README.md#docker-build-template) |
