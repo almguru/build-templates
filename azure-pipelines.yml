@@ -265,10 +265,6 @@ stages:
 
               cat > global.json << 'EOF'
               {
-                "sdk": {
-                  "version": "10.0.0",
-                  "rollForward": "latestMinor"
-                },
                 "test": {
                   "runner": "Microsoft.Testing.Platform"
                 }
