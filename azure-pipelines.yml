@@ -256,6 +256,17 @@ stages:
         steps:
           - checkout: self
 
+          - task: gitversion-setup@4
+            displayName: 'Install GitVersion'
+            inputs:
+              versionSpec: '6.x'
+
+          - task: gitversion-execute@4
+            displayName: 'Calculate SemVer'
+            inputs:
+              targetPath: '$(Build.SourcesDirectory)'
+              buildNumberFormat: '${GitVersion_FullSemVer}'
+
           - pwsh: |
               & './scripts/Test-DotNetBuildTemplate.ps1' -WorkDir "$(Agent.TempDirectory)/dotnet-sample"
             displayName: 'Create sample test project'
@@ -267,7 +278,6 @@ stages:
               versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
-              buildVersionProperties: ''
               buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
 
   # Test PowerShell scripts used by templates
