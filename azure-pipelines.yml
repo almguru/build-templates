@@ -268,7 +268,7 @@ stages:
               zipAfterPublish: false
               buildConfiguration: 'Release'
               buildVersionProperties: ''
-              buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true --property:GenerateAssemblyInfo=false'
+              buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
 
   # Test PowerShell scripts used by templates
   - stage: TestScripts
