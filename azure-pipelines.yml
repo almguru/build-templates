@@ -263,7 +263,21 @@ stages:
               mkdir -p "$work_dir"
               cd "$work_dir"
 
+              cat > global.json << 'EOF'
+              {
+                "sdk": {
+                  "version": "10.0.0",
+                  "rollForward": "latestMinor"
+                },
+                "test": {
+                  "runner": "Microsoft.Testing.Platform"
+                }
+              }
+              EOF
+
               dotnet new xunit -n Sample.Tests -f net10.0
+              dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform
+              dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform.Extensions.UnitTests
             displayName: 'Create sample test project'
 
           - template: pipelines/lib/build-dotnet.yml
