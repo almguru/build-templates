@@ -262,11 +262,12 @@ stages:
 
           - template: pipelines/lib/build-dotnet.yml
             parameters:
-              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.Tests.csproj'
+              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.Tests/Sample.Tests.csproj'
               testSpec: '**/Sample.Tests.dll'
               versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
+              buildVersionProperties: 'Version=1.0.0.0;PackageVersion=1.0.0.0;AssemblyVersion=1.0.0.0;FileVersion=1.0.0.0;InformationalVersion=1.0.0.0'
               buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
 
   # Test PowerShell scripts used by templates
