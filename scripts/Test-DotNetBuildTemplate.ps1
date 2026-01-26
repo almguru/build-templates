@@ -55,25 +55,77 @@ Write-Host "📚 Adding Microsoft.Testing.Platform package..."
 Write-Host ""
 Write-Host "⚙️ Configuring project to disable automatic assembly info generation..."
 $csprojPath = "$PWD/Sample.Tests/Sample.Tests.csproj"
+
+# Read the project file
 [xml]$csproj = Get-Content $csprojPath
+
+# Find or create PropertyGroup
 $propertyGroup = $csproj.Project.PropertyGroup | Select-Object -First 1
 if ($propertyGroup) {
-    $generateAssemblyInfo = $csproj.CreateElement("GenerateAssemblyInfo")
-    $generateAssemblyInfo.InnerText = "false"
-    $propertyGroup.AppendChild($generateAssemblyInfo) | Out-Null
+    # Check if element already exists
+    if (-not $propertyGroup.GenerateAssemblyInfo) {
+        $generateAssemblyInfo = $csproj.CreateElement("GenerateAssemblyInfo")
+        $generateAssemblyInfo.InnerText = "false"
+        $propertyGroup.AppendChild($generateAssemblyInfo) | Out-Null
+    } else {
+        $propertyGroup.GenerateAssemblyInfo = "false"
+    }
     
-    $generateRuntimeConfigurationFiles = $csproj.CreateElement("GenerateRuntimeConfigurationFiles")
-    $generateRuntimeConfigurationFiles.InnerText = "false"
-    $propertyGroup.AppendChild($generateRuntimeConfigurationFiles) | Out-Null
+    # Check if runtime config element already exists
+    if (-not $propertyGroup.GenerateRuntimeConfigurationFiles) {
+        $generateRuntimeConfigurationFiles = $csproj.CreateElement("GenerateRuntimeConfigurationFiles")
+        $generateRuntimeConfigurationFiles.InnerText = "true"
+        $propertyGroup.AppendChild($generateRuntimeConfigurationFiles) | Out-Null
+    } else {
+        $propertyGroup.GenerateRuntimeConfigurationFiles = "true"
+    }
     
-    $csproj.Save($csprojPath)
-    Write-Host "✓ Assembly info generation disabled"
+    # Save with proper XML settings
+    $xmlSettings = New-Object System.Xml.XmlWriterSettings
+    $xmlSettings.Indent = $true
+    $xmlSettings.IndentChars = "  "
+    $xmlSettings.Encoding = [System.Text.Encoding]::UTF8
+    
+    $xmlWriter = [System.Xml.XmlWriter]::Create($csprojPath, $xmlSettings)
+    $csproj.WriteTo($xmlWriter)
+    $xmlWriter.Close()
+    
+    Write-Host "✓ Assembly info generation disabled and runtime config enabled"
+    Write-Host ""
+    Write-Host "Verifying project file update:"
+    $updatedContent = Get-Content $csprojPath
+    if ($updatedContent -match "GenerateAssemblyInfo") {
+        Write-Host "✓ GenerateAssemblyInfo property found in project file"
+    } else {
+        Write-Host "⚠️ WARNING: GenerateAssemblyInfo not found in project file!"
+    }
 } else {
     Write-Host "⚠️ Could not find PropertyGroup in project file"
 }
 
 Write-Host ""
-Write-Host "🔍 Checking xUnit test project structure..."
+Write-Host "� Adding test method to verify tests run..."
+$testFileContent = @'
+namespace Sample.Tests;
+
+public class UnitTest1
+{
+    [Fact]
+    public void TestMethod_PassingTest()
+    {
+        Assert.True(true, "This is a passing test");
+    }
+
+    [Fact]
+    public void TestMethod_ArithmeticTest()
+    {
+        Assert.Equal(4, 2 + 2);
+    }
+}
+'@
+
+Set-Content -Path "Sample.Tests/UnitTest1.cs" -Value $testFileContent
+Write-Host "✓ Test methods added"
 Get-ChildItem -Path Sample.Tests -Recurse | Select-Object -First 20
 Write-Host ""
 Write-Host "Content of Sample.Tests.csproj:"
