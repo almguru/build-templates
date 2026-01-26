@@ -264,7 +264,7 @@ stages:
             parameters:
               buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.Tests/Sample.Tests.csproj'
               testSpec: '**/Sample.Tests.dll'
-              versionSpec: '10.x'
+              versionSpec: '8.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
               buildVersionProperties: ''
