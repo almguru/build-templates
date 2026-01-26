@@ -53,6 +53,26 @@ Write-Host "📚 Adding Microsoft.Testing.Platform package..."
 & dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform
 
 Write-Host ""
+Write-Host "⚙️ Configuring project to disable automatic assembly info generation..."
+$csprojPath = "$PWD/Sample.Tests/Sample.Tests.csproj"
+[xml]$csproj = Get-Content $csprojPath
+$propertyGroup = $csproj.Project.PropertyGroup | Select-Object -First 1
+if ($propertyGroup) {
+    $generateAssemblyInfo = $csproj.CreateElement("GenerateAssemblyInfo")
+    $generateAssemblyInfo.InnerText = "false"
+    $propertyGroup.AppendChild($generateAssemblyInfo) | Out-Null
+    
+    $generateRuntimeConfigurationFiles = $csproj.CreateElement("GenerateRuntimeConfigurationFiles")
+    $generateRuntimeConfigurationFiles.InnerText = "false"
+    $propertyGroup.AppendChild($generateRuntimeConfigurationFiles) | Out-Null
+    
+    $csproj.Save($csprojPath)
+    Write-Host "✓ Assembly info generation disabled"
+} else {
+    Write-Host "⚠️ Could not find PropertyGroup in project file"
+}
+
+Write-Host ""
 Write-Host "🔍 Checking xUnit test project structure..."
 Get-ChildItem -Path Sample.Tests -Recurse | Select-Object -First 20
 Write-Host ""

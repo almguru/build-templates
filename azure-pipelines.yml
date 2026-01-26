@@ -267,8 +267,8 @@ stages:
               versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
-              buildVersionProperties: 'Version=1.0.0.0;PackageVersion=1.0.0.0;AssemblyVersion=1.0.0.0;FileVersion=1.0.0.0;InformationalVersion=1.0.0.0'
-              buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
+              buildVersionProperties: ''
+              buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true --property:GenerateAssemblyInfo=false'
 
   # Test PowerShell scripts used by templates
   - stage: TestScripts
