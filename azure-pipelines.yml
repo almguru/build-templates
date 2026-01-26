@@ -245,6 +245,39 @@ stages:
                 Write-Host "##[section]Parameter validation logic verified successfully"
               pwsh: true
 
+  # Test build-dotnet.yml template
+  - stage: TestBuildDotNet
+    displayName: 'Test build-dotnet.yml Template'
+    dependsOn: []
+    jobs:
+      - job: RunBuildTemplate
+        displayName: 'Run template against sample project'
+        steps:
+          - checkout: self
+
+          - script: |
+              set -e
+              work_dir="$(Agent.TempDirectory)/dotnet-sample"
+              rm -rf "$work_dir"
+              mkdir -p "$work_dir"
+              cd "$work_dir"
+
+              dotnet new sln -n Sample
+              dotnet new classlib -n Sample -f net8.0
+              dotnet new xunit -n Sample.Tests -f net8.0
+              dotnet sln Sample.sln add Sample/Sample.csproj Sample.Tests/Sample.Tests.csproj
+              dotnet add Sample.Tests/Sample.Tests.csproj reference Sample/Sample.csproj
+            displayName: 'Create sample .NET solution'
+
+          - template: pipelines/lib/build-dotnet.yml
+            parameters:
+              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.sln'
+              testSpec: '**/Sample.Tests.dll'
+              versionSpec: '9.x'
+              zipAfterPublish: false
+              buildConfiguration: 'Release'
+              buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
+
   # Test PowerShell scripts used by templates
   - stage: TestScripts
     displayName: 'Test PowerShell Scripts'
@@ -319,6 +352,7 @@ stages:
               script: |
                 $templates = @(
                   'pipelines/lib/azure-cli.yml',
+                  'pipelines/lib/build-dotnet.yml',
                   'pipelines/lib/bicep-deploy.yml',
                   'pipelines/lib/docker.yml',
                   'pipelines/lib/run-acceptance-tests.yml',
@@ -351,6 +385,7 @@ stages:
       - TestAzureCLI
       - TestUseTemplateFiles
       - TestDocker
+      - TestBuildDotNet
       - TestScripts
       - VerifyTemplateAccessibility
     condition: always()
@@ -370,6 +405,7 @@ stages:
                 $azureCliResult = $env:STAGEDEPENDENCIES_TESTAZURECLI_VERIFYTEMPLATESTRUCTURE_RESULT
                 $useTemplateFilesResult = $env:STAGEDEPENDENCIES_TESTUSETEMPLATEFILES_TESTCHECKOUT_RESULT
                 $dockerResult = $env:STAGEDEPENDENCIES_TESTDOCKER_VERIFYTEMPLATESTRUCTURE_RESULT
+                $buildDotNetResult = $env:STAGEDEPENDENCIES_TESTBUILDDOTNET_RUNBUILDTEMPLATE_RESULT
                 $scriptsResult = $env:STAGEDEPENDENCIES_TESTSCRIPTS_TESTINVOKETESTRUNNER_RESULT
                 $accessibilityResult = $env:STAGEDEPENDENCIES_VERIFYTEMPLATEACCESSIBILITY_LISTTEMPLATES_RESULT
                 
@@ -377,6 +413,7 @@ stages:
                 if ([string]::IsNullOrEmpty($azureCliResult)) { $azureCliResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($useTemplateFilesResult)) { $useTemplateFilesResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($dockerResult)) { $dockerResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($buildDotNetResult)) { $buildDotNetResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($scriptsResult)) { $scriptsResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($accessibilityResult)) { $accessibilityResult = "Unknown" }
                 
@@ -384,6 +421,7 @@ stages:
                 Write-Host "  TestAzureCLI: $azureCliResult"
                 Write-Host "  TestUseTemplateFiles: $useTemplateFilesResult"
                 Write-Host "  TestDocker: $dockerResult"
+                Write-Host "  TestBuildDotNet: $buildDotNetResult"
                 Write-Host "  TestScripts: $scriptsResult"
                 Write-Host "  VerifyTemplateAccessibility: $accessibilityResult"
                 
@@ -423,6 +461,7 @@ stages:
                 |-------|--------|--------|
                 | azure-cli.yml Template Tests | $(Get-StatusEmoji $azureCliResult) | $azureCliResult |
                 | use-template-files.yml Tests | $(Get-StatusEmoji $useTemplateFilesResult) | $useTemplateFilesResult |
+                | build-dotnet.yml Template Tests | $(Get-StatusEmoji $buildDotNetResult) | $buildDotNetResult |
                 | docker.yml Template Tests | $(Get-StatusEmoji $dockerResult) | $dockerResult |
                 | PowerShell Scripts Tests | $(Get-StatusEmoji $scriptsResult) | $scriptsResult |
                 | Template Accessibility | $(Get-StatusEmoji $accessibilityResult) | $accessibilityResult |
@@ -457,6 +496,14 @@ stages:
                 - Error handling for missing parameters
                 
                 **Status:** $dockerResult
+
+                ### ✅ build-dotnet.yml
+                **Test Coverage:**
+                - Template execution against sample solution
+                - Restore, build, and test flow with artifacts output
+                - Custom build arguments handling
+
+                **Status:** $buildDotNetResult
                 
                 ### ✅ PowerShell Scripts
                 **Test Coverage:**
@@ -558,6 +605,7 @@ stages:
                 Write-Host "  ✓ azure-cli.yml - Multiple script types and configurations"
                 Write-Host "  ✓ use-template-files.yml - Repository checkout"
                 Write-Host "  ✓ docker.yml - Parameter validation"
+                Write-Host "  ✓ build-dotnet.yml - Sample build and test"
                 Write-Host "  ✓ PowerShell scripts - Invoke-TestRunner.ps1"
                 Write-Host ""
                 Write-Host "Note: bicep-deploy.yml and run-acceptance-tests.yml require Azure"
