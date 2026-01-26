@@ -256,24 +256,8 @@ stages:
         steps:
           - checkout: self
 
-          - script: |
-              set -e
-              work_dir="$(Agent.TempDirectory)/dotnet-sample"
-              rm -rf "$work_dir"
-              mkdir -p "$work_dir"
-              cd "$work_dir"
-
-              cat > global.json << 'EOF'
-              {
-                "test": {
-                  "runner": "Microsoft.Testing.Platform"
-                }
-              }
-              EOF
-
-              dotnet new xunit -n Sample.Tests -f net10.0
-              dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform
-              dotnet add Sample.Tests/Sample.Tests.csproj package Microsoft.Testing.Platform.Extensions.UnitTests
+          - pwsh: |
+              & './scripts/Test-DotNetBuildTemplate.ps1' -WorkDir "$(Agent.TempDirectory)/dotnet-sample"
             displayName: 'Create sample test project'
 
           - template: pipelines/lib/build-dotnet.yml
