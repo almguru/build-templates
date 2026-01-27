@@ -4,11 +4,10 @@
   <!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
 
   <PropertyGroup>
-    <UseArtifactsOutput Condition=" '$(UseArtifactsOutput)' == '' ">false</UseArtifactsOutput>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisMode>All</AnalysisMode>
-    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <UseArtifactsOutput Condition=" '$(UseArtifactsOutput)' == '' ">true</UseArtifactsOutput>
     <ArtifactsPath Condition=" '$(ArtifactsPath)' == '' ">$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <SarifLogsPath Condition=" '$(SarifLogsPath)' == '' ">$(ArtifactsPath)/sarif</SarifLogsPath>
     <ErrorLog Condition=" '$(ErrorLog)' == '' ">$(SarifLogsPath)/$(MSBuildProjectName)/$(Configuration)/$(MSBuildProjectName).sarif,version=2.1</ErrorLog>
