@@ -269,14 +269,10 @@ stages:
               targetPath: '$(Build.SourcesDirectory)'
               buildNumberFormat: '${GitVersion_FullSemVer}'
 
-          - pwsh: |
-              & './scripts/Test-DotNetBuildTemplate.ps1' -WorkDir "$(Agent.TempDirectory)/dotnet-sample"
-            displayName: 'Create sample test project'
-
           - template: pipelines/lib/build-dotnet.yml
             parameters:
-              buildSpec: '$(Agent.TempDirectory)/dotnet-sample/Sample.Tests/Sample.Tests.csproj'
-              testSpec: '**/Sample.Tests.dll'
+              buildSpec: 'src/Sample.slnx'
+              testSpec: '**/*.Tests.dll'
               versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
