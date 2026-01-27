@@ -1,6 +1,6 @@
 using System;
 
-namespace Dummy.Tests;
+namespace Sample.Tests;
 
 public class UnitTests
 {
