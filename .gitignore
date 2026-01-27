@@ -1,0 +1,174 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options directory
+.vs/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local History for Visual Studio
+.localhistory/
+
+# Visual Studio cache directory
+.vs/
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# ReSharper is a .NET coding add-in
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# VS Code extensions
+extensions/
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+.nuget/
+
+# The packages folder can be ignored because of Package Restore
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Code coverage reports
+coverage/
+*.lcov
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Artifacts
+artifacts/
+*.sarif
+
+# dotnet user secrets
+secrets.json
+.user-secrets
+
+# Entity Framework
+*.edmx.diagram
+
+# StyleCop
+StyleCopReport.xml
+
+# OpenCover UI analysis results
+OpenCover/
+
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+
+# Temp folders
+[Tt]emp/
+[Tt]emporary/
+
+# Node modules (if using Node.js tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE specific files
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Tool versions
+.tool-versions
+
+# MacOS
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+ehthumbs.db
+
+# Project specific
+.artifact*/

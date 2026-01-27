@@ -21,5 +21,15 @@
         "connectionId": "almguru",
         "projectKey": "almguru_build-templates"
     },
-    "sarif-viewer.connectToGithubCodeScanning": "on"
+    "sarif-viewer.connectToGithubCodeScanning": "on",
+    "chat.tools.terminal.autoApprove": {
+        "/^pwsh \\./scripts/Test-DotNetBuildTemplate\\.ps1 -WorkDir \"/tmp/dotnet-test\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^pwsh \\./scripts/Test-DotNetBuildTemplate\\.ps1 -WorkDir \"/tmp/dotnet-test-fixed\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

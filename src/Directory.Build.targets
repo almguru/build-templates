@@ -1,0 +1,9 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))"
+          Condition="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../')) != ''" />
+  <!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
+
+ <Target Name="MakeSarifLogsDir" AfterTargets="PrepareForBuild">
+    <MakeDir Directories="$(SarifLogsPath)/$(MSBuildProjectName)/$(Configuration)" Condition="!Exists('$(SarifLogsPath)/$(MSBuildProjectName)/$(Configuration)')"  />
+  </Target>
+</Project>

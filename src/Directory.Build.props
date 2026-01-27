@@ -1,0 +1,19 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"
+        Condition="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../')) != ''" />
+  <!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
+
+  <PropertyGroup>
+    <UseArtifactsOutput Condition=" '$(UseArtifactsOutput)' == '' ">false</UseArtifactsOutput>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisMode>All</AnalysisMode>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath Condition=" '$(ArtifactsPath)' == '' ">$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+    <SarifLogsPath Condition=" '$(SarifLogsPath)' == '' ">$(ArtifactsPath)/sarif</SarifLogsPath>
+    <ErrorLog Condition=" '$(ErrorLog)' == '' ">$(SarifLogsPath)/$(MSBuildProjectName)/$(Configuration)/$(MSBuildProjectName).sarif,version=2.1</ErrorLog>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+  </PropertyGroup>
+</Project>
