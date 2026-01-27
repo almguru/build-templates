@@ -272,7 +272,7 @@ stages:
           - template: pipelines/lib/build-dotnet.yml
             parameters:
               buildSpec: 'src/Sample.slnx'
-              testSpec: '**/bin/Release/**/*Tests.dll'
+              testSpec: '**/bin/**/*Tests.dll'
               versionSpec: '10.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
