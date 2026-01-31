@@ -15,6 +15,7 @@
         "pwsh",
         "setvariable",
         "vstest",
+        "vsts",
         "xunit"
     ],
     "sonarlint.connectedMode.project": {
