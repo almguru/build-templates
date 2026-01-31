@@ -41,6 +41,12 @@
 #       displayName: 'Start Test Database'
 #   unitTestArguments: '--filter Category=Unit'
 #
+#   # Build with VSTest mode for legacy projects
+#   unitTestUseMicrosoftTestingPlatform: false
+#   testSpec: 'tests/MyApp.Tests.csproj'
+#   dotNetUnitTestFilterOption: '--filter "Category!=Integration"'
+#   unitTestArguments: '--verbosity detailed'
+#
 # Usage:
 #   Include this template in your pipeline to build and test .NET projects with
 #   comprehensive support for versioning, code signing, and artifact management.
@@ -156,6 +162,16 @@ parameters:
     type: string
     default: ''
 
+  # Unit test filtering option for VSTest mode (e.g., --filter "Category=Unit")
+  - name: dotNetUnitTestFilterOption
+    type: string
+    default: ''
+
+  # Unit test run behavior - use Microsoft Testing Platform or VSTest mode
+  - name: unitTestUseMicrosoftTestingPlatform
+    type: boolean
+    default: true
+
   # Subfolder within artifact staging directory where build outputs will be copied
   - name: deploymentFolder
     type: string
@@ -225,24 +241,45 @@ steps:
 
   - ${{ parameters.beforeTestsSteps }}
 
-  - script: |
-      echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}"
-      dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}
-    displayName: '.Net test'
+  - ${{ if parameters.unitTestUseMicrosoftTestingPlatform }}:
+    - script: |
+        echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}"
+        dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}
+      displayName: '.Net test'
 
-  - task: PublishTestResults@2
-    condition: succeededOrFailed()
-    inputs:
-      testRunTitle: 'Unit tests (.Net)'
-      searchFolder: '$(Agent.TempDirectory)'
-      testResultsFormat: 'VSTest'
-      testResultsFiles: '**/*.trx'
-      mergeTestResults: true
-      failTaskOnMissingResultsFiles: true
-      failTaskOnFailedTests: true
-      failTaskOnFailureToPublishResults: true
-      publishRunAttachments: true
-    displayName: 'Publish unit tests results'
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      inputs:
+        testRunTitle: 'Unit tests (.Net)'
+        searchFolder: '$(Agent.TempDirectory)'
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '**/*.trx'
+        mergeTestResults: true
+        failTaskOnMissingResultsFiles: true
+        failTaskOnFailedTests: true
+        failTaskOnFailureToPublishResults: true
+        publishRunAttachments: true
+      displayName: 'Publish unit tests results'
+
+  - ${{ if not(parameters.unitTestUseMicrosoftTestingPlatform) }}:
+    - task: DotNetCoreCLI@2
+      displayName: 'Run unit tests'
+      inputs:
+        command: 'test'
+        projects: '${{ parameters.testSpec }}'
+        arguments: >
+          --no-build
+          --configuration ${{ parameters.buildConfiguration }}
+          --property:"${{ parameters.buildVersionProperties }}"
+          --property:UseArtifactsOutput=true
+          --artifacts-path $(Build.BinariesDirectory)
+          ${{ parameters.buildAdditionalArguments }}
+          ${{ parameters.dotNetUnitTestFilterOption }}
+          --collect "XPlat Code Coverage"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+          ${{ parameters.unitTestArguments }}
+        publishTestResults: true
+        testRunTitle: 'Unit tests (.Net)'
 
   - ${{ if ne(parameters.signFiles, '') }}:
       - task: AzureKeyVault@1
