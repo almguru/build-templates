@@ -248,7 +248,7 @@ Template for deploying Azure Bicep templates across different scopes (Subscripti
 | `file` | string | Required | Path to the Bicep file to deploy |
 | `overrideParameters` | string | `""` | Override parameters for deployment |
 | `useLegacyOverrideParameters` | boolean | `true` | Whether to parse `overrideParameters` as legacy `key=value` syntax. Set to `false` to pass native JSON/YAML object string directly to `BicepDeploy@0` |
-| `deploymentOutputs` | string | `"Bicep"` | Prefix for output variables |
+| `deploymentOutputs` | string | `"Bicep"` | Prefix for output variables (allowed chars: letters, digits, underscore, dot, hyphen) |
 | `actionOnUnmanageResources` | string | `""` | Deployment stack only: optional passthrough to `BicepDeploy@0` `actionOnUnmanageResources` |
 | `actionOnUnmanageResourceGroups` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `actionOnUnmanageResourceGroups` |
 | `actionOnUnmanageManagementGroups` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `actionOnUnmanageManagementGroups` |

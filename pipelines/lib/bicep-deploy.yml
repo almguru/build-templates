@@ -311,10 +311,23 @@ steps:
       $outputs[$outputName] = @{ value = $outputVar.Value }
     }
 
+    function Assert-SafeAzureDevOpsVariableName {
+      param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+      )
+
+      # Allow only characters that are safe in Azure DevOps logging commands.
+      if ($Name -notmatch '^[A-Za-z0-9_.-]+$') {
+        throw "Unsafe Azure DevOps variable name detected: '$Name'. Allowed characters: letters, digits, underscore, dot, hyphen."
+      }
+    }
+
     Write-Host "##[group]Build legacy output variables"
     Write-Host "BicepDeploy outputs discovered: $($outputs.Keys -join ', ')"
 
     $allOutputsVariableName = "${{ parameters.deploymentOutputs }}"
+    Assert-SafeAzureDevOpsVariableName -Name $allOutputsVariableName
     $allOutputsJson = $outputs | ConvertTo-Json -Compress -Depth 100
     Write-Host "##vso[task.setvariable variable=$allOutputsVariableName]$allOutputsJson"
 
@@ -324,6 +337,8 @@ steps:
 
       $nameVariableName = "$allOutputsVariableName.$outputName.name"
       $valueVariableName = "$allOutputsVariableName.$outputName.value"
+      Assert-SafeAzureDevOpsVariableName -Name $nameVariableName
+      Assert-SafeAzureDevOpsVariableName -Name $valueVariableName
 
       Write-Host "##vso[task.setvariable variable=$nameVariableName]$outputName"
       Write-Host "##vso[task.setvariable variable=$valueVariableName]$outputValue"
