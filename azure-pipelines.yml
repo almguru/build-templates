@@ -378,54 +378,6 @@ stages:
                 Write-Host "##[section]All templates verified successfully"
               pwsh: true
 
-  # Compile-time template expansion validation.
-  # This stage is intentionally never run at runtime; it exists to force Azure DevOps
-  # to parse and expand every template reference during pipeline compilation.
-  - stage: ValidateTemplateExpansion
-    displayName: 'Validate Template Expansion (Compile Only)'
-    dependsOn: []
-    condition: eq(1, 2)
-    jobs:
-      - job: ExpandAllTemplates
-        displayName: 'Expand all templates without execution'
-        steps:
-          - template: pipelines/lib/azure-cli.yml
-            parameters:
-              azureSubscription: 'engineering-dev'
-              script:
-                type: 'bash'
-                script: 'echo compile-only'
-
-          - template: pipelines/lib/use-template-files.yml
-            parameters:
-              repositoryResourceName: 'self'
-              repositoryLocalPath: 'compile-only-template-files'
-
-          - template: pipelines/lib/build-dotnet.yml
-            parameters:
-              buildAction: 'build'
-              buildSpec: 'src/Sample.slnx'
-              testSpec: '**/*Tests.dll'
-              versionSpec: '10.x'
-              buildConfiguration: 'Release'
-              zipAfterPublish: false
-
-          - template: pipelines/lib/run-acceptance-tests.yml
-            parameters:
-              environmentName: 'CompileOnly'
-              runtimeType: 'none'
-              suiteName: 'Compile Only Acceptance'
-              artifactName: 'deploy'
-              files: '**/*Tests.dll'
-
-          - template: pipelines/lib/bicep-deploy.yml
-            parameters:
-              azureSubscription: 'engineering-dev'
-              deploymentScope: 'Subscription'
-              location: 'eastus'
-              file: 'pipelines/lib/bicep-deploy.yml'
-              overrideParameters: ''
-
   # Summary stage
   - stage: TestSummary
     displayName: 'Test Summary'
