@@ -410,15 +410,6 @@ stages:
               buildConfiguration: 'Release'
               zipAfterPublish: false
 
-          - template: pipelines/lib/docker.yml
-            parameters:
-              containerRegistry: '$(compileOnlyContainerRegistry)'
-              images:
-                - name: 'compile-only'
-                  dockerFile: 'src/Sample.Api/Dockerfile'
-                  buildContext: 'src'
-                  repositoryName: 'compile/only'
-
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
               environmentName: 'CompileOnly'
