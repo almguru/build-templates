@@ -281,12 +281,8 @@ steps:
       ${{ if eq(parameters.tenantId, '') }}:
         tenantId: "$(BicepDeploy.TenantId)"
 
-- task: PowerShell@2
+- pwsh: |
+    & "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1" `
+      -DeploymentOutputsPrefix '${{ replace(parameters.deploymentOutputs, '''', '''''') }}'
   displayName: "Build legacy output variables"
   condition: and(succeeded(), ne(variables.almguruTemplateFilesPath, ''))
-  inputs:
-    targetType: "filePath"
-    filePath: "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1"
-    arguments: >
-      -DeploymentOutputsPrefix '${{ replace(parameters.deploymentOutputs, '''', '''''') }}'
-    pwsh: true
