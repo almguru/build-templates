@@ -210,22 +210,22 @@ steps:
           Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
         displayName: "Convert legacy deployment parameters"
 
-- template: azure-cli.yml
-  condition: and(succeeded(), or(and(or(eq('${{ parameters.deploymentScope }}', 'ResourceGroup'), eq('${{ parameters.deploymentScope }}', 'Subscription')), eq('${{ parameters.subscriptionId }}', '')), and(eq('${{ parameters.deploymentScope }}', 'Tenant'), eq('${{ parameters.tenantId }}', ''))))
-  parameters:
-    azureSubscription: ${{ parameters.azureSubscription }}
-    script:
-      type: "pscore"
-      script: |
-        $ErrorActionPreference = "Stop"
-        $accountInfo = az account show --query "{subscriptionId:id,tenantId:tenantId}" --output json | ConvertFrom-Json
+- ${{ if or(and(or(eq(parameters.deploymentScope, 'ResourceGroup'), eq(parameters.deploymentScope, 'Subscription')), eq(parameters.subscriptionId, '')), and(eq(parameters.deploymentScope, 'Tenant'), eq(parameters.tenantId, ''))) }}:
+  - template: azure-cli.yml
+    parameters:
+      azureSubscription: ${{ parameters.azureSubscription }}
+      script:
+        type: "pscore"
+        script: |
+          $ErrorActionPreference = "Stop"
+          $accountInfo = az account show --query "{subscriptionId:id,tenantId:tenantId}" --output json | ConvertFrom-Json
 
-        if ($null -eq $accountInfo -or [string]::IsNullOrWhiteSpace($accountInfo.subscriptionId) -or [string]::IsNullOrWhiteSpace($accountInfo.tenantId)) {
-            throw "Unable to resolve subscription and tenant IDs from Azure service connection."
-        }
-        Write-Host "##vso[task.setvariable variable=BicepDeploy.SubscriptionId]$($accountInfo.subscriptionId)"
-        Write-Host "##vso[task.setvariable variable=BicepDeploy.TenantId]$($accountInfo.tenantId)"
-      displayName: "Resolve subscription/tenant IDs"
+          if ($null -eq $accountInfo -or [string]::IsNullOrWhiteSpace($accountInfo.subscriptionId) -or [string]::IsNullOrWhiteSpace($accountInfo.tenantId)) {
+              throw "Unable to resolve subscription and tenant IDs from Azure service connection."
+          }
+          Write-Host "##vso[task.setvariable variable=BicepDeploy.SubscriptionId]$($accountInfo.subscriptionId)"
+          Write-Host "##vso[task.setvariable variable=BicepDeploy.TenantId]$($accountInfo.tenantId)"
+        displayName: "Resolve subscription/tenant IDs"
 
 - task: BicepDeploy@0
   name: bicepDeploy
