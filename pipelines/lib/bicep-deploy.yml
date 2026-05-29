@@ -326,7 +326,7 @@ steps:
     Write-Host "##[group]Build legacy output variables"
     Write-Host "BicepDeploy outputs discovered: $($outputs.Keys -join ', ')"
 
-    $allOutputsVariableName = "${{ parameters.deploymentOutputs }}"
+    $allOutputsVariableName = $env:LEGACY_DEPLOYMENT_OUTPUTS_VARIABLE
     Assert-SafeAzureDevOpsVariableName -Name $allOutputsVariableName
     $allOutputsJson = $outputs | ConvertTo-Json -Compress -Depth 100
     Write-Host "##vso[task.setvariable variable=$allOutputsVariableName]$allOutputsJson"
@@ -346,3 +346,5 @@ steps:
 
     Write-Host "##[endgroup]"
   displayName: "Build legacy output variables"
+  env:
+    LEGACY_DEPLOYMENT_OUTPUTS_VARIABLE: ${{ parameters.deploymentOutputs }}
