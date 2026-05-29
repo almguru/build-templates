@@ -19,7 +19,7 @@ Use GitHub's private vulnerability reporting:
 2. Select **Report a vulnerability**.
 3. Provide reproduction details, impact, and any suggested remediation.
 
-If private reporting is unavailable in your environment, open a regular issue with minimal details and ask maintainers for a private contact channel.
+If private reporting is unavailable in your environment, please contact the maintainers via a private channel (for example, by emailing a repository owner/organization admin) and avoid sharing vulnerability details publicly.
 
 ## What to Include
 
