@@ -12,8 +12,6 @@ name: PSScriptAnalyzer
 on:
   push:
   pull_request:
-  schedule:
-    - cron: '39 18 * * 6'
 
 permissions:
   contents: read
