@@ -391,7 +391,7 @@ stages:
         steps:
           - template: pipelines/lib/azure-cli.yml
             parameters:
-              azureSubscription: '$(compileOnlyAzureSubscription)'
+              azureSubscription: 'engineering-dev'
               script:
                 type: 'bash'
                 script: 'echo compile-only'
@@ -429,7 +429,7 @@ stages:
 
           - template: pipelines/lib/bicep-deploy.yml
             parameters:
-              azureSubscription: '$(compileOnlyAzureSubscription)'
+              azureSubscription: 'engineering-dev'
               deploymentScope: 'Subscription'
               location: 'eastus'
               file: 'pipelines/lib/bicep-deploy.yml'
