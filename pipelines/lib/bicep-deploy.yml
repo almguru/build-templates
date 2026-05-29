@@ -197,18 +197,12 @@ steps:
     displayName: "Fail if template files are not configured"
 
 - ${{ if parameters.useLegacyOverrideParameters }}:
-  - template: azure-cli.yml
-    parameters:
-      azureSubscription: ${{ parameters.azureSubscription }}
-      defaultScriptType: "pscore"
-      script:
-        type: "pscore"
-        script: |
-          $ErrorActionPreference = "Stop"
-          $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
-            -OverrideParameters '${{ replace(parameters.overrideParameters, '''', '''''') }}'
-          Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
-        displayName: "Convert legacy deployment parameters"
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+      $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
+        -OverrideParameters '${{ replace(parameters.overrideParameters, '''', '''''') }}'
+      Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
+    displayName: "Convert legacy deployment parameters"
 
 - ${{ if or(and(or(eq(parameters.deploymentScope, 'ResourceGroup'), eq(parameters.deploymentScope, 'Subscription')), eq(parameters.subscriptionId, '')), and(eq(parameters.deploymentScope, 'Tenant'), eq(parameters.tenantId, ''))) }}:
   - template: azure-cli.yml
