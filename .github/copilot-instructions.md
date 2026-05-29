@@ -80,6 +80,15 @@ Templates support three feed strategies via `feedsToUse` parameter:
 - Prefer explicit script parameters over hidden environment-variable inputs when practical
 - Always include and keep current inline documentation for PowerShell scripts (comment-based help with `.SYNOPSIS`, `.DESCRIPTION`, and `.PARAMETER` sections)
 
+### 7. Branch Naming Rules
+- Use only repository-approved branch prefixes:
+  - `features/<descriptive-name>`
+  - `bugfix/<descriptive-name>`
+  - `hotfix/<descriptive-name>`
+  - `copilot/<descriptive-name>`
+- Use lowercase kebab-case for `<descriptive-name>`.
+- Do not use custom prefixes like `almguru/` because branch naming checks reject them.
+
 ## Integration Points and Dependencies
 
 ### Required Repository Setup

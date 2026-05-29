@@ -103,7 +103,7 @@ foreach ($param in $parameterList) {
             continue
         }
         catch {
-            # Keep as string if the value is JSON-like but invalid JSON.
+            Write-Verbose "Failed to parse '$paramName' as JSON: $($_.Exception.Message). Falling back to scalar parsing."
         }
     }
 
