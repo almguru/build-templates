@@ -189,11 +189,12 @@ parameters:
   default: ""
 
 steps:
-- pwsh: |
-    Write-Host "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call `use-template-files.yml` first."
-    exit 1
-  condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
-  displayName: "Fail if template files are not configured"
+- ${{ if parameters.useLegacyOverrideParameters }}:
+  - pwsh: |
+      Write-Host "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call ``use-template-files.yml`` first."
+      exit 1
+    condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
+    displayName: "Fail if template files are not configured"
 
 - ${{ if parameters.useLegacyOverrideParameters }}:
   - template: azure-cli.yml
