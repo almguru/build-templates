@@ -228,37 +228,74 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
 
 **Location:** `pipelines/lib/bicep-deploy.yml`
 
-Template for deploying Azure Bicep templates across different scopes (Subscription, Resource Group, Management Group, or Tenant) with parameter override support and automatic output variable creation.
+Template for deploying Azure Bicep templates across different scopes (Subscription, Resource Group, Management Group, or Tenant) using [`BicepDeploy@0`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines), while preserving backward-compatible parameter and output behavior.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `azureSubscription` | string | Required | Azure service connection name |
+| `type` | string | `""` | Optional passthrough to `BicepDeploy@0` `type` input. When empty, task default is used |
+| `operation` | string | `""` | Optional passthrough to `BicepDeploy@0` `operation` input. When empty, task default is used |
 | `deploymentScope` | string | `'Subscription'` | Deployment scope (`Subscription`, `ResourceGroup`, `ManagementGroup`, `Tenant`) |
 | `deploymentName` | string | `"Bicep-Deploy-$(System.DefinitionId)-$(Build.BuildId)-$(System.JobAttempt)"` | Name for the deployment |
+| `deploymentDescription` | string | `"Deployed by $(Build.DefinitionName) build $(Build.BuildNumber)"` | Description written to Azure deployment history |
 | `location` | string | Required* | Azure location for Subscription/Management Group/Tenant scopes |
+| `subscriptionId` | string | `""` | Optional subscription ID for `ResourceGroup`/`Subscription` scopes (auto-resolved when omitted) |
 | `resourceGroupName` | string | `"rg-my-resource-group"` | Resource group name for ResourceGroup scope |
 | `managementGroupId` | string | `"mg-my-management-group"` | Management group ID for ManagementGroup scope |
+| `tenantId` | string | `""` | Optional tenant ID for `Tenant` scope (auto-resolved when omitted) |
 | `file` | string | Required | Path to the Bicep file to deploy |
 | `overrideParameters` | string | `""` | Override parameters for deployment |
-| `deploymentOutputs` | string | `"Bicep"` | Prefix for output variables |
+| `useLegacyOverrideParameters` | boolean | `true` | Whether to parse `overrideParameters` as legacy `key=value` syntax. Set to `false` to pass native JSON/YAML object string directly to `BicepDeploy@0` |
+| `deploymentOutputs` | string | `"Bicep"` | Prefix for output variables (allowed chars: letters, digits, underscore, dot, hyphen) |
+| `actionOnUnmanageResources` | string | `""` | Deployment stack only: optional passthrough to `BicepDeploy@0` `actionOnUnmanageResources` |
+| `actionOnUnmanageResourceGroups` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `actionOnUnmanageResourceGroups` |
+| `actionOnUnmanageManagementGroups` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `actionOnUnmanageManagementGroups` |
+| `denySettingsMode` | string | `""` | Deployment stack only: optional passthrough to `BicepDeploy@0` `denySettingsMode` |
+| `denySettingsExcludedActions` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `denySettingsExcludedActions` |
+| `denySettingsExcludedPrincipals` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `denySettingsExcludedPrincipals` |
+| `denySettingsApplyToChildScopes` | boolean | `false` | Deployment stack only: passthrough to `BicepDeploy@0` `denySettingsApplyToChildScopes` |
+| `bypassStackOutOfSyncError` | string | `""` | Deployment stack only: optional passthrough to `BicepDeploy@0` `bypassStackOutOfSyncError` (`true`/`false`) |
+| `stackTags` | string | `""` | Deployment stack only: passthrough to `BicepDeploy@0` `tags` (JSON/YAML object string) |
 
 *Required for Subscription, Management Group, and Tenant scopes
 
 ### Features
 
+- **Native Bicep Task:** Uses Azure DevOps `BicepDeploy@0` for deployments
+- **Deployment Stack Support:** Supports `type: deploymentStack` with stack lifecycle controls
 - **Multi-Scope Deployment:** Supports all Azure deployment scopes
-- **Parameter Processing:** Advanced parameter parsing with JSON support and proper escaping
+- **Parameter Processing:** Uses a single `overrideParameters` input with a legacy parsing switch (`useLegacyOverrideParameters`)
+- **Scripted Parameter Preparation:** Uses `scripts/ConvertTo-BicepDeploymentParametersJson.ps1` only for legacy `key=value` conversion
 - **Output Variables:** Automatically creates Azure DevOps variables from Bicep outputs
+- **Native Task Outputs:** Exposes `BicepDeploy@0` output variables (preferred format: `$(bicepDeploy.<outputName>)`)
 - **Variable Naming:** Follows structured naming convention: `{deploymentOutputs}.{outputName}.name` and `{deploymentOutputs}.{outputName}.value`
-- **Portal Integration:** Provides deployment details URL for Azure Portal
 - **Error Handling:** Comprehensive error handling and validation
+
+> **Note:** `use-template-files.yml` is required when you need helper scripts (legacy `key=value` conversion and legacy output alias generation). With `useLegacyOverrideParameters: false`, deployment itself can run without template checkout and native `bicepDeploy.*` outputs remain available.
+
+For stack-specific input semantics and valid values, refer to the official [`BicepDeploy@0` task documentation](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines).
 
 ### Parameter Override Examples
 
 ```yaml
+# Preferred: native JSON object passed directly to BicepDeploy@0
+useLegacyOverrideParameters: false
+overrideParameters: |
+  {
+    "environmentName": "$(environmentName)",
+    "location": "$(environmentLocation)"
+  }
+
+# Also supported: native YAML object passed directly to BicepDeploy@0
+useLegacyOverrideParameters: false
+overrideParameters: |
+  environmentName: "$(environmentName)"
+  location: "$(environmentLocation)"
+
 # Simple parameters
+useLegacyOverrideParameters: true
 overrideParameters: 'environmentName=production resourceGroupName=myRG'
 
 # JSON parameter with escaped quotes
@@ -271,17 +308,25 @@ overrideParameters: 'settings={`"logging`":{`"level`":`"info`",`"enabled`":true}
 overrideParameters: 'env=prod tags="{\"project\":\"app\",\"team\":\"engineering\"}" debug=false'
 ```
 
+`overrideParameters` is converted only when `useLegacyOverrideParameters` is `true`. When it is `false`, the value is passed directly to `BicepDeploy@0` and can be either JSON or YAML as documented in [Override parameters](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines#override-parameters).
+
 ### Output Variables
 
-The template automatically creates pipeline variables from Bicep deployment outputs:
-- **Individual Variables:** `{deploymentOutputs}.{outputName}.name` and `{deploymentOutputs}.{outputName}.value`
+The template exposes deployment outputs in two formats:
+- **Preferred (native `BicepDeploy@0` outputs):** `$(bicepDeploy.<outputName>)` (see [BicepDeploy@0 output usage](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines#deployment-outputs))
+- **Backward-compatible aliases:** `{deploymentOutputs}.{outputName}.name` and `{deploymentOutputs}.{outputName}.value`, derived from native `BicepDeploy@0` output variables (**deprecated**; scheduled for removal in the next major template version)
 - **Consolidated JSON:** Single variable with the `deploymentOutputs` parameter name containing all outputs as JSON
 
 ### Usage Examples
 
+For full task syntax and options, see the official [`BicepDeploy@0` task documentation](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines).
+
 #### Resource Group Deployment
 
 ```yaml
+# Required: make template helper scripts available
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
     azureSubscription: 'my-azure-connection'
@@ -293,14 +338,22 @@ The template automatically creates pipeline variables from Bicep deployment outp
 
 # Use outputs from previous deployment
 - script: |
-    echo "Storage Account: $(Infrastructure.storageAccountName.value)"
-    echo "App Service URL: $(Infrastructure.appServiceUrl.value)"
+    # Preferred format (native BicepDeploy task outputs)
+    echo "Storage Account: $(bicepDeploy.storageAccountName)"
+    echo "App Service URL: $(bicepDeploy.appServiceUrl)"
+
+    # Backward-compatible aliases
+    echo "Storage Account (legacy): $(Infrastructure.storageAccountName.value)"
+    echo "App Service URL (legacy): $(Infrastructure.appServiceUrl.value)"
   displayName: 'Display Deployment Outputs'
 ```
 
 #### Subscription Scope Deployment
 
 ```yaml
+# Required: make template helper scripts available
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
     azureSubscription: 'my-azure-connection'
@@ -313,6 +366,9 @@ The template automatically creates pipeline variables from Bicep deployment outp
 #### Management Group Scope Deployment
 
 ```yaml
+# Required: make template helper scripts available
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
     azureSubscription: 'my-azure-connection'
@@ -320,6 +376,50 @@ The template automatically creates pipeline variables from Bicep deployment outp
     managementGroupId: 'mg-production'
     location: 'eastus'
     file: 'infrastructure/management-group.bicep'
+```
+
+#### Deployment Stack Create/Update (Resource Group Scope)
+
+```yaml
+# Required: make template helper scripts available
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
+- template: pipelines/lib/bicep-deploy.yml@almguru-templates
+  parameters:
+    azureSubscription: 'my-azure-connection'
+    type: 'deploymentStack'
+    operation: 'create'
+    deploymentScope: 'ResourceGroup'
+    resourceGroupName: 'my-resource-group'
+    file: 'infrastructure/main.bicep'
+    useLegacyOverrideParameters: false
+    overrideParameters: |
+      environmentName: production
+      location: eastus
+    actionOnUnmanageResources: 'detach'
+    denySettingsMode: 'denyDelete'
+    denySettingsExcludedPrincipals: '00000000-0000-0000-0000-000000000000'
+    stackTags: |
+      Environment: Production
+      Owner: PlatformTeam
+```
+
+#### Deployment Stack Delete (Resource Group Scope)
+
+```yaml
+# Required: make template helper scripts available
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
+- template: pipelines/lib/bicep-deploy.yml@almguru-templates
+  parameters:
+    azureSubscription: 'my-azure-connection'
+    type: 'deploymentStack'
+    operation: 'delete'
+    deploymentScope: 'ResourceGroup'
+    resourceGroupName: 'my-resource-group'
+    deploymentName: 'production-stack'
+    file: 'infrastructure/main.bicep'
+    useLegacyOverrideParameters: false
 ```
 
 ## Docker Build Template
@@ -487,7 +587,7 @@ Template for checking out template repository files to make scripts and resource
 ### Usage Example
 
 ```yaml
-# Must be called before other templates that require template files
+# Must be called once per job before templates that require template files
 - template: pipelines/lib/use-template-files.yml@almguru-templates
   parameters:
     repositoryResourceName: 'almguru-templates'
@@ -555,6 +655,8 @@ stages:
   - job: DeployInfrastructure
     displayName: 'Deploy Infrastructure'
     steps:
+    - template: pipelines/lib/use-template-files.yml@almguru-templates
+
     # Deploy infrastructure using Bicep
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
@@ -574,8 +676,8 @@ stages:
           location: 'inlineScript'
           script: |
             # Use outputs from Bicep deployment
-            APP_SERVICE_NAME=$(Infrastructure.appServiceName.value)
-            CONTAINER_REGISTRY=$(Infrastructure.containerRegistry.value)
+            APP_SERVICE_NAME=$(bicepDeploy.appServiceName)
+            CONTAINER_REGISTRY=$(bicepDeploy.containerRegistry)
             
             # Deploy container to App Service
             az webapp config container set \
@@ -624,6 +726,8 @@ stages:
   jobs:
   - job: Deploy
     steps:
+    - template: pipelines/lib/use-template-files.yml@almguru-templates
+
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
         azureSubscription: 'azure-dev-connection'
@@ -657,6 +761,8 @@ stages:
   jobs:
   - job: Deploy
     steps:
+    - template: pipelines/lib/use-template-files.yml@almguru-templates
+
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
         azureSubscription: 'azure-prod-connection'
