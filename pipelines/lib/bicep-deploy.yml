@@ -6,16 +6,16 @@
 #
 # Description:
 #   This reusable pipeline template deploys Azure resources using Bicep templates across
-#   multiple deployment scopes (Subscription, Resource Group, Management Group, or Tenant).
-#   It automatically converts Bicep deployment outputs to Azure DevOps pipeline variables,
-#   similar to the AzureResourceGroupDeployment@2 task behavior.
+#   multiple deployment scopes (Subscription, Resource Group, Management Group, or Tenant)
+#   via BicepDeploy@0.
+#   It preserves the previous output variable contract for backward compatibility.
 #
 # Key Features:
-#   - Multi-scope deployment support (Subscription, Resource Group, Management Group, Tenant)
-#   - Advanced parameter parsing with JSON support and special character escaping
-#   - Automatic output variable generation with structured naming convention
-#   - Compatible with existing Azure DevOps deployment patterns
-#   - Comprehensive error handling and deployment validation
+#   - Native BicepDeploy@0 support for multi-scope deployments
+#   - Optional Azure Deployment Stack support with stack-specific controls
+#   - Legacy override parameter parsing switch via useLegacyOverrideParameters
+#   - Backward-compatible output variable generation
+#   - Automatic subscription/tenant resolution when not explicitly provided
 #
 # Variable Naming Convention:
 #   - All outputs are prefixed with the deploymentOutputs parameter (default: "Bicep")
@@ -29,6 +29,21 @@
 # Parameter Examples:
 #   # Simple parameters
 #   overrideParameters: 'environmentName=production resourceGroupName=myRG'
+#   useLegacyOverrideParameters: true
+#   
+#   # JSON object passed directly to BicepDeploy@0
+#   useLegacyOverrideParameters: false
+#   overrideParameters: |
+#     {
+#       "environmentName": "production",
+#       "location": "eastus"
+#     }
+#
+#   # YAML object passed directly to BicepDeploy@0
+#   useLegacyOverrideParameters: false
+#   overrideParameters: |
+#     environmentName: production
+#     location: eastus
 #   
 #   # JSON parameters with escaped quotes
 #   overrideParameters: 'config="{\"database\":{\"name\":\"db\",\"tier\":\"premium\"}}"'
@@ -49,6 +64,18 @@ parameters:
 - name: azureSubscription
   type: string
 
+# Optional execution type for BicepDeploy@0.
+# When empty, BicepDeploy@0 default is used.
+- name: type
+  type: string
+  default: ""
+
+# Optional operation for BicepDeploy@0.
+# When empty, BicepDeploy@0 default is used.
+- name: operation
+  type: string
+  default: ""
+
 # Deployment scope for the Bicep deployment
 - name: deploymentScope
   type: string
@@ -64,9 +91,20 @@ parameters:
   type: string
   default: "Bicep-Deploy-$(System.DefinitionId)-$(Build.BuildId)-$(System.JobAttempt)"
 
+# Deployment description for Azure deployment history
+- name: deploymentDescription
+  type: string
+  default: "Deployed by $(Build.DefinitionName) build $(Build.BuildNumber)"
+
 # Geographical Azure Location for Subscription and Management Group scopes
 - name: location 
   type: string
+
+# Subscription ID for ResourceGroup and Subscription scopes.
+# If omitted, it will be resolved automatically from the service connection.
+- name: subscriptionId
+  type: string
+  default: ""
 
 # Resource Group name for Resource Group scope
 - name: resourceGroupName
@@ -78,6 +116,12 @@ parameters:
   type: string
   default: "mg-my-management-group"
 
+# Tenant ID for Tenant scope.
+# If omitted, it will be resolved automatically from the service connection.
+- name: tenantId
+  type: string
+  default: ""
+
 # Bicep file to deploy
 - name: file
   type: string
@@ -87,248 +131,203 @@ parameters:
   type: string
   default: ""
 
+# Whether to parse overrideParameters as legacy key=value input.
+# - true: parse legacy key=value syntax (backward-compatible behavior)
+# - false: pass overrideParameters directly as JSON/YAML object string
+- name: useLegacyOverrideParameters
+  type: boolean
+  default: true
+
 # Bicep deployment outputs variable name
 - name: deploymentOutputs
   type: string
   default: "Bicep"
 
-steps:      
+# Stack only: action for unmanaged resources
+- name: actionOnUnmanageResources
+  type: string
+  default: ""
+
+# Stack only: action for unmanaged resource groups
+- name: actionOnUnmanageResourceGroups
+  type: string
+  default: ""
+
+# Stack only: action for unmanaged management groups
+- name: actionOnUnmanageManagementGroups
+  type: string
+  default: ""
+
+# Stack only: deny settings mode
+- name: denySettingsMode
+  type: string
+  default: ""
+
+# Stack only: comma-separated action names excluded from deny settings
+- name: denySettingsExcludedActions
+  type: string
+  default: ""
+
+# Stack only: comma-separated principal object IDs excluded from deny settings
+- name: denySettingsExcludedPrincipals
+  type: string
+  default: ""
+
+# Stack only: apply deny settings to child scopes
+- name: denySettingsApplyToChildScopes
+  type: boolean
+  default: false
+
+# Stack only: bypass stack out-of-sync error
+- name: bypassStackOutOfSyncError
+  type: string
+  default: ""
+
+# Stack only: tags object in JSON or YAML string format
+- name: stackTags
+  type: string
+  default: ""
+
+steps:
+- pwsh: |
+    Write-Host "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call `use-template-files.yml` first."
+    exit 1
+  condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
+  displayName: "Fail if template files are not configured"
+
+- ${{ if parameters.useLegacyOverrideParameters }}:
+  - template: azure-cli.yml
+    parameters:
+      azureSubscription: ${{ parameters.azureSubscription }}
+      defaultScriptType: "pscore"
+      script:
+        type: "pscore"
+        script: |
+          $ErrorActionPreference = "Stop"
+          $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
+            -OverrideParameters '${{ replace(parameters.overrideParameters, '''', '''''') }}'
+          Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
+        displayName: "Convert legacy deployment parameters"
+
+- ${{ if not(parameters.useLegacyOverrideParameters) }}:
+  - pwsh: |
+      $parametersJson = @'
+      ${{ parameters.overrideParameters }}
+      '@.Trim()
+      Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
+    displayName: "Prepare deployment parameters (structured format)"
+
 - template: azure-cli.yml
+  condition: and(succeeded(), or(and(or(eq('${{ parameters.deploymentScope }}', 'ResourceGroup'), eq('${{ parameters.deploymentScope }}', 'Subscription')), eq('${{ parameters.subscriptionId }}', '')), and(eq('${{ parameters.deploymentScope }}', 'Tenant'), eq('${{ parameters.tenantId }}', ''))))
   parameters:
     azureSubscription: ${{ parameters.azureSubscription }}
     script:
-      type: 'pscore'
-      script: | 
+      type: "pscore"
+      script: |
         $ErrorActionPreference = "Stop"
+        $accountInfo = az account show --query "{subscriptionId:id,tenantId:tenantId}" --output json | ConvertFrom-Json
 
-        Write-Host "##[group]Prepare Bicep deployment arguments"
-        Write-Host "##[section]Prepare Bicep deployment parameter"
-        # Set deployment scope
-        $deploymentScope = "${{ parameters.deploymentScope }}"
-        $deploymentName = "${{ parameters.deploymentName }}"
-        $bicepFile = "${{ parameters.file }}"
-        $overrideParameters = "${{ replace(parameters.overrideParameters, '\"', '`"') }}"
-        
-        # Remove line breaks and normalize whitespace in PowerShell
-        $overrideParameters = $overrideParameters -replace '\r?\n', ' ' -replace '\s+', ' '
-        $overrideParameters = $overrideParameters.Trim()
-
-        # Build deployment command based on scope
-        $deploymentCmd = @()
-
-        switch ($deploymentScope) {
-            "Subscription" {
-                $deploymentCmd += "az", "deployment", "sub", "create"
-                $deploymentCmd += "--location", "${{ parameters.location }}"
-            }
-            "ResourceGroup" {
-                $deploymentCmd += "az", "deployment", "group", "create"
-                $deploymentCmd += "--resource-group", "${{ parameters.resourceGroupName }}"
-            }
-            "ManagementGroup" {
-                $deploymentCmd += "az", "deployment", "mg", "create"
-                $deploymentCmd += "--management-group-id", "${{ parameters.managementGroupId }}"
-                $deploymentCmd += "--location", "${{ parameters.location }}"
-            }
-            default {
-                $deploymentCmd += "az", "deployment", "tenant", "create"
-                $deploymentCmd += "--location", "${{ parameters.location }}"
-            }
+        if ($null -eq $accountInfo -or [string]::IsNullOrWhiteSpace($accountInfo.subscriptionId) -or [string]::IsNullOrWhiteSpace($accountInfo.tenantId)) {
+            throw "Unable to resolve subscription and tenant IDs from Azure service connection."
         }
+        Write-Host "##vso[task.setvariable variable=BicepDeploy.SubscriptionId]$($accountInfo.subscriptionId)"
+        Write-Host "##vso[task.setvariable variable=BicepDeploy.TenantId]$($accountInfo.tenantId)"
+      displayName: "Resolve subscription/tenant IDs"
 
-        Write-Host "##[section]Prepare override parameters"
-        # Add common parameters
-        $deploymentCmd += "--name", $deploymentName
-        $deploymentCmd += "--template-file", $bicepFile
-        $deploymentCmd += "--no-prompt"
-        $deploymentCmd += "--output", "json"
+- task: BicepDeploy@0
+  name: bicepDeploy
+  displayName: "Deploy Bicep Resources"
+  inputs:
+    ${{ if ne(parameters.type, '') }}:
+      type: ${{ parameters.type }}
+    ${{ if ne(parameters.operation, '') }}:
+      operation: ${{ parameters.operation }}
+    name: ${{ parameters.deploymentName }}
+    description: ${{ parameters.deploymentDescription }}
+    azureResourceManagerConnection: ${{ parameters.azureSubscription }}
+    templateFile: ${{ parameters.file }}
+    parameters: "$(BicepDeploy.ParametersJson)"
+    ${{ if eq(parameters.type, 'deploymentStack') }}:
+      ${{ if ne(parameters.actionOnUnmanageResources, '') }}:
+        actionOnUnmanageResources: ${{ parameters.actionOnUnmanageResources }}
+      ${{ if ne(parameters.denySettingsMode, '') }}:
+        denySettingsMode: ${{ parameters.denySettingsMode }}
+        denySettingsApplyToChildScopes: ${{ parameters.denySettingsApplyToChildScopes }}
+      ${{ if ne(parameters.bypassStackOutOfSyncError, '') }}:
+        bypassStackOutOfSyncError: ${{ parameters.bypassStackOutOfSyncError }}
+      ${{ if ne(parameters.actionOnUnmanageResourceGroups, '') }}:
+        actionOnUnmanageResourceGroups: ${{ parameters.actionOnUnmanageResourceGroups }}
+      ${{ if ne(parameters.actionOnUnmanageManagementGroups, '') }}:
+        actionOnUnmanageManagementGroups: ${{ parameters.actionOnUnmanageManagementGroups }}
+      ${{ if ne(parameters.denySettingsExcludedActions, '') }}:
+        denySettingsExcludedActions: ${{ parameters.denySettingsExcludedActions }}
+      ${{ if ne(parameters.denySettingsExcludedPrincipals, '') }}:
+        denySettingsExcludedPrincipals: ${{ parameters.denySettingsExcludedPrincipals }}
+      ${{ if ne(parameters.stackTags, '') }}:
+        tags: ${{ parameters.stackTags }}
+    ${{ if eq(parameters.deploymentScope, 'ResourceGroup') }}:
+      scope: "resourceGroup"
+      resourceGroupName: ${{ parameters.resourceGroupName }}
+      ${{ if ne(parameters.subscriptionId, '') }}:
+        subscriptionId: ${{ parameters.subscriptionId }}
+      ${{ if eq(parameters.subscriptionId, '') }}:
+        subscriptionId: "$(BicepDeploy.SubscriptionId)"
+    ${{ if eq(parameters.deploymentScope, 'Subscription') }}:
+      scope: "subscription"
+      location: ${{ parameters.location }}
+      ${{ if ne(parameters.subscriptionId, '') }}:
+        subscriptionId: ${{ parameters.subscriptionId }}
+      ${{ if eq(parameters.subscriptionId, '') }}:
+        subscriptionId: "$(BicepDeploy.SubscriptionId)"
+    ${{ if eq(parameters.deploymentScope, 'ManagementGroup') }}:
+      scope: "managementGroup"
+      managementGroupId: ${{ parameters.managementGroupId }}
+      location: ${{ parameters.location }}
+    ${{ if eq(parameters.deploymentScope, 'Tenant') }}:
+      scope: "tenant"
+      location: ${{ parameters.location }}
+      ${{ if ne(parameters.tenantId, '') }}:
+        tenantId: ${{ parameters.tenantId }}
+      ${{ if eq(parameters.tenantId, '') }}:
+        tenantId: "$(BicepDeploy.TenantId)"
 
-        # Add override parameters if provided
-        if (-not [string]::IsNullOrEmpty($overrideParameters)) {
-            Write-Host "Raw override parameters: $overrideParameters"
-            
-            # Clean up the parameters string first
-            $cleanParams = $overrideParameters.Trim()
-            Write-Host "Cleaned parameters: $cleanParams"
-            
-            # Parse parameters while respecting both backtick-escaped quotes and regular quotes
-            $parameterList = @()
-            $currentParam = ""
-            $inQuotes = $false
-            $i = 0
-            $braceCount = 0
-            $bracketCount = 0
-            
-            while ($i -lt $cleanParams.Length) {
-                $char = $cleanParams[$i]
-                
-                # Handle escaped characters (backtick escapes)
-                if ($char -eq '`' -and ($i + 1) -lt $cleanParams.Length) {
-                    $nextChar = $cleanParams[$i + 1]
-                    if ($nextChar -eq '"') {
-                        # This is an escaped quote - add both characters and toggle quote state
-                        $currentParam += $char + $nextChar
-                        $inQuotes = -not $inQuotes
-                        $i += 2  # Skip next character since we processed it
-                        continue
-                    }
-                }
-                elseif ($char -eq '"') {
-                    # Regular quote - toggle quote state
-                    $inQuotes = -not $inQuotes
-                    $currentParam += $char
-                }
-                elseif ($char -eq '{') {
-                    $braceCount++
-                    $currentParam += $char
-                }
-                elseif ($char -eq '}') {
-                    $braceCount--
-                    $currentParam += $char
-                }
-                elseif ($char -eq '[') {
-                    $bracketCount++
-                    $currentParam += $char
-                }
-                elseif ($char -eq ']') {
-                    $bracketCount--
-                    $currentParam += $char
-                }
-                elseif ($char -eq ' ' -and -not $inQuotes -and $braceCount -eq 0 -and $bracketCount -eq 0) {
-                    # Space outside quotes and outside JSON structures - parameter boundary
-                    if ($currentParam.Trim()) {
-                        $parameterList += $currentParam.Trim()
-                        Write-Host "Found parameter: $($currentParam.Trim())"
-                    }
-                    $currentParam = ""
-                }
-                else {
-                    $currentParam += $char
-                }
-                
-                $i++
-            }
-            
-            # Add the last parameter if any
-            if ($currentParam.Trim()) {
-                $parameterList += $currentParam.Trim()
-                Write-Host "Found final parameter: $($currentParam.Trim())"
-            }
-            
-            # Process each parameter to handle JSON minimization if needed
-            $finalParameterList = @()
-            foreach ($param in $parameterList) {
-                if ($param -match '^(\w+)=(.+)$') {
-                    $paramName = $matches[1]
-                    $paramValue = $matches[2]
-                    
-                    # Check if the value looks like JSON (starts with { or [, ends with } or ])
-                    if ($paramValue -match '^[\s]*[{\[].*[}\]][\s]*$') {
-                        try {
-                            # Remove line breaks and extra whitespace from JSON string
-                            $cleanJsonContent = $paramValue -replace '\r?\n', '' -replace '\s+', ' '
-                            $cleanJsonContent = $cleanJsonContent.Trim()
-                            
-                            # Parse and minimize JSON
-                            $parsedJson = $cleanJsonContent | ConvertFrom-Json
-                            $minimizedJson = $parsedJson | ConvertTo-Json -Compress
-                            $finalParameterList += "$paramName=$minimizedJson"
-                            Write-Host "Processed JSON parameter: $paramName (minimized from $($cleanJsonContent.Length) to $($minimizedJson.Length) chars)"
-                        }
-                        catch {
-                            # If JSON parsing fails, clean up whitespace and wrap in quotes
-                            $cleanValue = $paramValue -replace '\r?\n', '' -replace '\s+', ' '
-                            $cleanValue = $cleanValue.Trim()
-                            if ($cleanValue -notmatch '^".*"$') {
-                                $finalParameterList += "$paramName=`"$cleanValue`""
-                            } else {
-                                $finalParameterList += "$paramName=$cleanValue"
-                            }
-                            Write-Host "Could not parse as JSON, keeping as cleaned string: $paramName"
-                        }
-                    }
-                    elseif ($paramValue -match '^".*"$') {
-                        # Already quoted string, keep as-is
-                        $finalParameterList += $param
-                        Write-Host "Processed quoted parameter: $paramName"
-                    }
-                    else {
-                        # Unquoted value, wrap in quotes if it contains spaces
-                        if ($paramValue -match '\s') {
-                            $finalParameterList += "$paramName=`"$paramValue`""
-                        } else {
-                            $finalParameterList += $param
-                        }
-                        Write-Host "Processed unquoted parameter: $paramName"
-                    }
-                }
-                else {
-                    # Malformed parameter, keep as-is
-                    $finalParameterList += $param
-                    Write-Host "Keeping malformed parameter as-is: $param"
-                }
-            }
-            
-            Write-Host "Final parameter list: $($finalParameterList -join ' | ')"
-            
-            $deploymentCmd += "--parameters"
-            $deploymentCmd += $finalParameterList
-        }
-        Write-Host "##[endgroup]"
+- pwsh: |
+    $ErrorActionPreference = "Stop"
 
-        Write-Host "##[section]Bicep deployment"
+    $internalVariables = @(
+      'BICEPDEPLOY_PARAMETERSJSON',
+      'BICEPDEPLOY_SUBSCRIPTIONID',
+      'BICEPDEPLOY_TENANTID'
+    )
 
-        # Execute deployment and capture output
-        Write-Host "##[command]$($deploymentCmd -join ' ')"
-        $deploymentOutput = & $deploymentCmd[0] $deploymentCmd[1..($deploymentCmd.Length-1)]
+    $outputs = [ordered]@{}
+    $bicepOutputVariables = Get-ChildItem Env: | Where-Object {
+      $_.Name.StartsWith('BICEPDEPLOY_') -and
+      -not ($internalVariables -contains $_.Name)
+    }
 
-        if ($LASTEXITCODE -ne 0) {
-            throw "Deployment failed with exit code $LASTEXITCODE"
-        }
+    foreach ($outputVar in $bicepOutputVariables) {
+      $outputName = $outputVar.Name.Substring('BICEPDEPLOY_'.Length).ToLowerInvariant()
+      $outputs[$outputName] = @{ value = $outputVar.Value }
+    }
 
-        # Parse deployment output as JSON
-        $deploymentResult = $deploymentOutput | ConvertFrom-Json
-        $outputs = $deploymentResult.properties.outputs
+    Write-Host "##[group]Build legacy output variables"
+    Write-Host "BicepDeploy outputs discovered: $($outputs.Keys -join ', ')"
 
-        # URL encode the deploymentResult.id
-        function UrlEncode([string]$str) {
-            [System.Net.WebUtility]::UrlEncode($str)
-        }
-        $encodedDeploymentId = UrlEncode $deploymentResult.id
+    $allOutputsVariableName = "${{ parameters.deploymentOutputs }}"
+    $allOutputsJson = $outputs | ConvertTo-Json -Compress -Depth 100
+    Write-Host "##vso[task.setvariable variable=$allOutputsVariableName]$allOutputsJson"
 
-        $deploymentDetailsUrl = "https://portal.azure.com/#blade/HubsExtension/DeploymentDetailsBlade/overview/id/$encodedDeploymentId"
-        Write-Host "Deployment details URL: $deploymentDetailsUrl"
+    foreach ($output in $outputs.GetEnumerator()) {
+      $outputName = $output.Key
+      $outputValue = $output.Value.value
 
-        if ($null -eq $outputs) {
-            $outputs = @{}
-        }
+      $nameVariableName = "$allOutputsVariableName.$outputName.name"
+      $valueVariableName = "$allOutputsVariableName.$outputName.value"
 
-        Write-Host "##[group]Build deployment outputs variables"
-        Write-Host "Deployment outputs: $($outputs | ConvertTo-Json -Compress)"
+      Write-Host "##vso[task.setvariable variable=$nameVariableName]$outputName"
+      Write-Host "##vso[task.setvariable variable=$valueVariableName]$outputValue"
+    }
 
-        # Create JSON string with all outputs (similar to deploymentOutputs variable)
-        $allOutputsJson = $outputs | ConvertTo-Json -Compress
-        $allOutputsVariableName = "${{ parameters.deploymentOutputs }}"
-        Write-Host "##vso[task.setvariable variable=$allOutputsVariableName]$allOutputsJson"
-
-        # Create individual variables for each output
-        if ($outputs -and $outputs.PSObject.Properties.Count -gt 0) {
-            foreach ($output in $outputs.PSObject.Properties) {
-                $outputName = $output.Name
-                $outputValue = $output.Value.value
-                
-                # Create structured variables with name and value
-                $nameVariableName = "$allOutputsVariableName.$outputName.name"
-                $valueVariableName = "$allOutputsVariableName.$outputName.value"
-                
-                Write-Host "##vso[task.setvariable variable=$nameVariableName]$outputName"
-                Write-Host "##vso[task.setvariable variable=$valueVariableName]$outputValue"
-                Write-Host "Created variable: $nameVariableName = $outputName"
-                Write-Host "Created variable: $valueVariableName = $outputValue"
-            }
-        }
-
-        Write-Host "##[endgroup]"
-
-        Write-Host "Bicep deployment completed successfully"
-      displayName: "Deploy Bicep Resources"
+    Write-Host "##[endgroup]"
+  displayName: "Build legacy output variables"
