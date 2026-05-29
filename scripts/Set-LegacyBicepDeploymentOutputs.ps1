@@ -42,7 +42,7 @@ $bicepOutputVariables = Get-ChildItem Env: | Where-Object {
 }
 
 foreach ($outputVar in $bicepOutputVariables) {
-  $outputName = $outputVar.Name.Substring('BICEPDEPLOY_'.Length).ToLowerInvariant()
+  $outputName = $outputVar.Name.Substring('BICEPDEPLOY_'.Length)
   $outputs[$outputName] = @{ value = $outputVar.Value }
 }
 

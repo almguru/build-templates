@@ -210,14 +210,6 @@ steps:
           Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
         displayName: "Convert legacy deployment parameters"
 
-- ${{ if not(parameters.useLegacyOverrideParameters) }}:
-  - pwsh: |
-      $parametersJson = @'
-      ${{ parameters.overrideParameters }}
-      '@.Trim()
-      Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
-    displayName: "Prepare deployment parameters (structured format)"
-
 - template: azure-cli.yml
   condition: and(succeeded(), or(and(or(eq('${{ parameters.deploymentScope }}', 'ResourceGroup'), eq('${{ parameters.deploymentScope }}', 'Subscription')), eq('${{ parameters.subscriptionId }}', '')), and(eq('${{ parameters.deploymentScope }}', 'Tenant'), eq('${{ parameters.tenantId }}', ''))))
   parameters:
@@ -247,7 +239,10 @@ steps:
     description: ${{ parameters.deploymentDescription }}
     azureResourceManagerConnection: ${{ parameters.azureSubscription }}
     templateFile: ${{ parameters.file }}
-    parameters: "$(BicepDeploy.ParametersJson)"
+    ${{ if parameters.useLegacyOverrideParameters }}:
+      parameters: "$(BicepDeploy.ParametersJson)"
+    ${{ if not(parameters.useLegacyOverrideParameters) }}:
+      parameters: ${{ parameters.overrideParameters }}
     ${{ if eq(parameters.type, 'deploymentStack') }}:
       ${{ if ne(parameters.actionOnUnmanageResources, '') }}:
         actionOnUnmanageResources: ${{ parameters.actionOnUnmanageResources }}
@@ -294,6 +289,7 @@ steps:
 
 - task: PowerShell@2
   displayName: "Build legacy output variables"
+  condition: and(succeeded(), ne(variables.almguruTemplateFilesPath, ''))
   inputs:
     targetType: "filePath"
     filePath: "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1"

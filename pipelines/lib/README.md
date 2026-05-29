@@ -273,7 +273,7 @@ Template for deploying Azure Bicep templates across different scopes (Subscripti
 - **Variable Naming:** Follows structured naming convention: `{deploymentOutputs}.{outputName}.name` and `{deploymentOutputs}.{outputName}.value`
 - **Error Handling:** Comprehensive error handling and validation
 
-> **Note:** `use-template-files.yml` is required only when `useLegacyOverrideParameters: true` (legacy `key=value` conversion uses helper scripts). When `useLegacyOverrideParameters: false`, this template can run without checking out template files.
+> **Note:** `use-template-files.yml` is required when you need helper scripts (legacy `key=value` conversion and legacy output alias generation). With `useLegacyOverrideParameters: false`, deployment itself can run without template checkout and native `bicepDeploy.*` outputs remain available.
 
 For stack-specific input semantics and valid values, refer to the official [`BicepDeploy@0` task documentation](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines).
 

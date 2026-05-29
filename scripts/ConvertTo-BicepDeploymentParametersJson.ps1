@@ -92,8 +92,10 @@ foreach ($param in $parameterList) {
     $paramName = $matches[1]
     $paramValue = $matches[2].Trim()
     $decodedValue = $paramValue -replace '`"', '"'
+    $wasQuotedString = $false
 
     if ($decodedValue.Length -ge 2 -and $decodedValue.StartsWith('"') -and $decodedValue.EndsWith('"')) {
+        $wasQuotedString = $true
         $decodedValue = $decodedValue.Substring(1, $decodedValue.Length - 2)
     }
 
@@ -107,13 +109,13 @@ foreach ($param in $parameterList) {
         }
     }
 
-    if ($decodedValue -match '^(?i:true|false)$') {
+    if (-not $wasQuotedString -and $decodedValue -match '^(?i:true|false)$') {
         $parameterObject[$paramName] = [System.Convert]::ToBoolean($decodedValue)
         continue
     }
 
     $numberValue = 0
-    if ([double]::TryParse($decodedValue, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$numberValue)) {
+    if (-not $wasQuotedString -and [double]::TryParse($decodedValue, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$numberValue)) {
         $parameterObject[$paramName] = $numberValue
         continue
     }
