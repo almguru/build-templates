@@ -291,60 +291,11 @@ steps:
       ${{ if eq(parameters.tenantId, '') }}:
         tenantId: "$(BicepDeploy.TenantId)"
 
-- pwsh: |
-    $ErrorActionPreference = "Stop"
-
-    $internalVariables = @(
-      'BICEPDEPLOY_PARAMETERSJSON',
-      'BICEPDEPLOY_SUBSCRIPTIONID',
-      'BICEPDEPLOY_TENANTID'
-    )
-
-    $outputs = [ordered]@{}
-    $bicepOutputVariables = Get-ChildItem Env: | Where-Object {
-      $_.Name.StartsWith('BICEPDEPLOY_') -and
-      -not ($internalVariables -contains $_.Name)
-    }
-
-    foreach ($outputVar in $bicepOutputVariables) {
-      $outputName = $outputVar.Name.Substring('BICEPDEPLOY_'.Length).ToLowerInvariant()
-      $outputs[$outputName] = @{ value = $outputVar.Value }
-    }
-
-    function Assert-SafeAzureDevOpsVariableName {
-      param(
-        [Parameter(Mandatory = $true)]
-        [string] $Name
-      )
-
-      # Allow only characters that are safe in Azure DevOps logging commands.
-      if ($Name -notmatch '^[A-Za-z0-9_.-]+$') {
-        throw "Unsafe Azure DevOps variable name detected: '$Name'. Allowed characters: letters, digits, underscore, dot, hyphen."
-      }
-    }
-
-    Write-Host "##[group]Build legacy output variables"
-    Write-Host "BicepDeploy outputs discovered: $($outputs.Keys -join ', ')"
-
-    $allOutputsVariableName = $env:LEGACY_DEPLOYMENT_OUTPUTS_VARIABLE
-    Assert-SafeAzureDevOpsVariableName -Name $allOutputsVariableName
-    $allOutputsJson = $outputs | ConvertTo-Json -Compress -Depth 100
-    Write-Host "##vso[task.setvariable variable=$allOutputsVariableName]$allOutputsJson"
-
-    foreach ($output in $outputs.GetEnumerator()) {
-      $outputName = $output.Key
-      $outputValue = $output.Value.value
-
-      $nameVariableName = "$allOutputsVariableName.$outputName.name"
-      $valueVariableName = "$allOutputsVariableName.$outputName.value"
-      Assert-SafeAzureDevOpsVariableName -Name $nameVariableName
-      Assert-SafeAzureDevOpsVariableName -Name $valueVariableName
-
-      Write-Host "##vso[task.setvariable variable=$nameVariableName]$outputName"
-      Write-Host "##vso[task.setvariable variable=$valueVariableName]$outputValue"
-    }
-
-    Write-Host "##[endgroup]"
+- task: PowerShell@2
   displayName: "Build legacy output variables"
-  env:
-    LEGACY_DEPLOYMENT_OUTPUTS_VARIABLE: ${{ parameters.deploymentOutputs }}
+  inputs:
+    targetType: "filePath"
+    filePath: "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1"
+    arguments: >
+      -DeploymentOutputsPrefix '${{ replace(parameters.deploymentOutputs, '''', '''''') }}'
+    pwsh: true
