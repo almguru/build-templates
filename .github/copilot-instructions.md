@@ -75,6 +75,20 @@ Templates support three feed strategies via `feedsToUse` parameter:
 - Use `$(System.*)` and `$(Build.*)` variables from Azure DevOps context
 - **Conditions** in templates use `${{ if condition }}` syntax for compile-time logic
 
+### 6. PowerShell Script Standards
+- Use approved Verb-Noun naming for script filenames (for example, `ConvertTo-*`, `Invoke-*`, `Set-*`)
+- Prefer explicit script parameters over hidden environment-variable inputs when practical
+- Always include and keep current inline documentation for PowerShell scripts (comment-based help with `.SYNOPSIS`, `.DESCRIPTION`, and `.PARAMETER` sections)
+
+### 7. Branch Naming Rules
+- Use only repository-approved branch prefixes:
+  - `features/<descriptive-name>`
+  - `bugfix/<descriptive-name>`
+  - `hotfix/<descriptive-name>`
+  - `copilot/<descriptive-name>`
+- Use lowercase kebab-case for `<descriptive-name>`.
+- Do not use custom prefixes like `almguru/` because branch naming checks reject them.
+
 ## Integration Points and Dependencies
 
 ### Required Repository Setup
@@ -116,5 +130,6 @@ When adding or modifying templates:
 - **Document parameter examples** in template comments (shows up in pipeline UI)
 - **Use stepList for extensibility** - Provide `before*Steps` hooks so consumers can inject custom logic
 - **Validate early** - Check parameter combinations in template steps (see `azure-cli.yml` verification pattern)
+- **Validate after every edit** - Re-check any file you changed for syntax, formatting, and template expression correctness before finishing
 - **Test parameter coverage** - Add test cases in `azure-pipelines.yml` for new parameter combinations
 - **Use consistent naming** - Follow verb-noun convention for step display names and parameter names

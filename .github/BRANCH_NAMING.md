@@ -18,6 +18,7 @@ features/<descriptive-name>
 ### Other Branch Types
 - `hotfix/<issue-description>` - For urgent production fixes
 - `bugfix/<issue-description>` - For bug fixes
+- `dependabot/<dependency-update>` - For automated dependency updates
 - `docs/<documentation-update>` - For documentation updates
 - `chore/<maintenance-task>` - For maintenance and cleanup tasks
 
