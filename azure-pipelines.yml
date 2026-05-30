@@ -631,24 +631,15 @@ stages:
         steps:
           - checkout: none
 
-          - task: PowerShell@2
-            displayName: 'Validate GitHub release configuration'
-            inputs:
-              targetType: 'inline'
-              script: |
-                if ([string]::IsNullOrWhiteSpace('$(GitHubServiceConnection)') -or '$(GitHubServiceConnection)' -eq '$(GitHubServiceConnection)') {
-                    Write-Host "##vso[task.logissue type=error]Pipeline variable 'GitHubServiceConnection' must be set to a GitHub service connection name."
-                    exit 1
-                }
-              pwsh: true
-
           - task: GitHubRelease@1
             displayName: 'Create GitHub release $(Build.BuildNumber)'
             inputs:
-              gitHubConnection: '$(GitHubServiceConnection)'
+              gitHubConnection: 'GitHub'
               repositoryName: '$(Build.Repository.Name)'
               action: 'create'
               target: '$(Build.SourceVersion)'
               tagSource: 'userSpecifiedTag'
-              tag: '$(Build.BuildNumber)'
-              title: '$(Build.BuildNumber)'
+              tag: 'v$(Build.BuildNumber)'
+              title: 'Release v$(Build.BuildNumber)'
+              releaseNotesSource: 'inline'
+              releaseNotes: 'Automated release created from build $(Build.BuildNumber)'
