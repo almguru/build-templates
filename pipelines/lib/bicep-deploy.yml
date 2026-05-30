@@ -197,18 +197,14 @@ steps:
     displayName: "Fail if template files are not configured"
 
 - ${{ if parameters.useLegacyOverrideParameters }}:
-  - template: azure-cli.yml
-    parameters:
-      azureSubscription: ${{ parameters.azureSubscription }}
-      defaultScriptType: "pscore"
-      script:
-        type: "pscore"
-        script: |
-          $ErrorActionPreference = "Stop"
-          $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
-            -OverrideParameters '${{ replace(parameters.overrideParameters, '''', '''''') }}'
-          Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
-        displayName: "Convert legacy deployment parameters"
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+      $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
+        -OverrideParameters "$env:BICEPDEPLOY_LEGACY_OVERRIDE_PARAMETERS"
+      Write-Host "##vso[task.setvariable variable=BicepDeploy.ParametersJson]$parametersJson"
+    displayName: "Convert legacy deployment parameters"
+    env:
+      BICEPDEPLOY_LEGACY_OVERRIDE_PARAMETERS: ${{ parameters.overrideParameters }}
 
 - ${{ if or(and(or(eq(parameters.deploymentScope, 'ResourceGroup'), eq(parameters.deploymentScope, 'Subscription')), eq(parameters.subscriptionId, '')), and(eq(parameters.deploymentScope, 'Tenant'), eq(parameters.tenantId, ''))) }}:
   - template: azure-cli.yml
@@ -287,12 +283,10 @@ steps:
       ${{ if eq(parameters.tenantId, '') }}:
         tenantId: "$(BicepDeploy.TenantId)"
 
-- task: PowerShell@2
+- pwsh: |
+    & "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1" `
+      -DeploymentOutputsPrefix "$env:BICEPDEPLOY_LEGACY_OUTPUT_PREFIX"
   displayName: "Build legacy output variables"
   condition: and(succeeded(), ne(variables.almguruTemplateFilesPath, ''))
-  inputs:
-    targetType: "filePath"
-    filePath: "$(almguruTemplateFilesPath)/scripts/Set-LegacyBicepDeploymentOutputs.ps1"
-    arguments: >
-      -DeploymentOutputsPrefix '${{ replace(parameters.deploymentOutputs, '''', '''''') }}'
-    pwsh: true
+  env:
+    BICEPDEPLOY_LEGACY_OUTPUT_PREFIX: ${{ parameters.deploymentOutputs }}
