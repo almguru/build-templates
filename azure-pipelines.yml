@@ -625,6 +625,8 @@ stages:
       - VerifyTemplateAccessibility
       - TestSummary
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      GitHubServiceConnection: 'almguru'
     jobs:
       - job: PublishRelease
         displayName: 'Create and tag GitHub release'
@@ -633,8 +635,9 @@ stages:
 
           - task: GitHubRelease@1
             displayName: 'Create GitHub release $(Build.BuildNumber)'
+            condition: and(succeeded(), ne(variables['GitHubServiceConnection'], ''))
             inputs:
-              gitHubConnection: 'almguru'
+              gitHubConnection: '$(GitHubServiceConnection)'
               repositoryName: '$(Build.Repository.Name)'
               action: 'create'
               target: '$(Build.SourceVersion)'

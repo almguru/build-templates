@@ -3,8 +3,6 @@
 
 import { joinSession } from "@github/copilot-sdk/extension";
 import { execSync } from "child_process";
-import * as fs from "fs";
-import * as path from "path";
 
 const ALLOWED_PATTERNS = [
   { prefix: "features/", description: "Feature branch" },
@@ -14,6 +12,14 @@ const ALLOWED_PATTERNS = [
   { prefix: "chore/", description: "Maintenance/cleanup" },
   { prefix: "dependabot/", description: "Automated dependency update" },
 ];
+
+function normalizeKebabCase(input) {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function validateBranchName(branchName) {
   // Ignore special branches
@@ -28,20 +34,22 @@ function validateBranchName(branchName) {
 
   if (!match) {
     const allowedPrefixes = ALLOWED_PATTERNS.map((p) => p.prefix).join(", ");
+    const normalized = normalizeKebabCase(branchName);
     return {
       valid: false,
       message: `Branch name does not match conventions. Must start with one of: ${allowedPrefixes}`,
-      suggestion: `Try renaming to: features/${branchName.replace(/[^a-z0-9-]/g, "-")}`,
+      suggestion: `Try renaming to: features/${normalized}`,
     };
   }
 
   // Check naming (kebab-case)
   const namePart = branchName.substring(match.prefix.length);
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(namePart)) {
+    const normalized = normalizeKebabCase(namePart);
     return {
       valid: false,
       message: `Branch name part "${namePart}" doesn't follow kebab-case convention (lowercase letters, numbers, hyphens only)`,
-      suggestion: `Try: ${match.prefix}${namePart.toLowerCase().replace(/[^a-z0-9-]/g, "-")}`,
+      suggestion: `Try: ${match.prefix}${normalized}`,
     };
   }
 
