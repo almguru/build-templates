@@ -634,7 +634,7 @@ stages:
           - task: GitHubRelease@1
             displayName: 'Create GitHub release $(Build.BuildNumber)'
             inputs:
-              gitHubConnection: 'GitHub'
+              gitHubConnection: 'almguru'
               repositoryName: '$(Build.Repository.Name)'
               action: 'create'
               target: '$(Build.SourceVersion)'
