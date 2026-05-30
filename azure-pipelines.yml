@@ -378,6 +378,52 @@ stages:
                 Write-Host "##[section]All templates verified successfully"
               pwsh: true
 
+      # Compile-time validation: references all templates but never executes.
+      - job: CompileTimeTemplateValidation
+        displayName: 'Compile-time validation (never runs)'
+        condition: eq(1, 0)
+        steps:
+          - checkout: self
+
+          - template: pipelines/lib/use-template-files.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 'template-compile-validation'
+
+          - template: pipelines/lib/azure-cli.yml
+            parameters:
+              azureSubscription: 'public-teamplates'
+              script:
+                type: 'bash'
+                location: 'inlineScript'
+                script: 'echo "compile-time validation"'
+
+          - template: pipelines/lib/bicep-deploy.yml
+            parameters:
+              azureSubscription: 'public-teamplates'
+              deploymentScope: 'Subscription'
+              location: 'eastus'
+              file: 'infra/compile-validation.bicep'
+
+          - template: pipelines/lib/docker.yml
+            parameters:
+              containerRegistry: ''
+              images: []
+
+          - template: pipelines/lib/build-dotnet.yml
+            parameters:
+              buildAction: 'build'
+              buildSpec: 'src/Sample.slnx'
+              testSpec: 'bin/**/*.Tests.dll'
+              zipAfterPublish: false
+
+          - template: pipelines/lib/run-acceptance-tests.yml
+            parameters:
+              azureSubscription: 'public-teamplates'
+              environmentName: 'CompileValidation'
+              runtimeType: 'none'
+              suiteName: 'Compile-time validation'
+
   # Summary stage
   - stage: TestSummary
     displayName: 'Test Summary'
