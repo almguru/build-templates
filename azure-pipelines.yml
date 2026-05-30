@@ -392,7 +392,7 @@ stages:
 
           - template: pipelines/lib/azure-cli.yml
             parameters:
-              azureSubscription: 'public-teamplates'
+              azureSubscription: 'public-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'
@@ -400,7 +400,7 @@ stages:
 
           - template: pipelines/lib/bicep-deploy.yml
             parameters:
-              azureSubscription: 'public-teamplates'
+              azureSubscription: 'public-templates'
               deploymentScope: 'Subscription'
               location: 'eastus'
               file: 'infra/compile-validation.bicep'
@@ -419,7 +419,7 @@ stages:
 
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
-              azureSubscription: 'public-teamplates'
+              azureSubscription: 'public-templates'
               environmentName: 'CompileValidation'
               runtimeType: 'none'
               suiteName: 'Compile-time validation'
