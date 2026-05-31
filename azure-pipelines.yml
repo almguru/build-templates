@@ -28,12 +28,44 @@ pool:
   vmImage: 'ubuntu-latest'
 
 stages:
+  - stage: Setup
+    displayName: 'Setup'
+    dependsOn: []
+    jobs:
+      - job: ComputeVersion
+        displayName: 'Compute GitVersion variables'
+        steps:
+          - checkout: self
+            fetchDepth: 0 # Shallow Clone disabled so GitVersion can analyze full history
+            fetchTags: true # Ensure version source tags are available to GitVersion
+            path: 's'
+
+          - task: gitversion-setup@4
+            displayName: 'Install GitVersion'
+            inputs:
+              versionSpec: '6.x'
+
+          - task: gitversion-execute@4
+            displayName: 'Calculate SemVer'
+            inputs:
+              targetPath: '$(Build.Repository.LocalPath)'
+
+          - script: |
+              echo "##vso[task.setvariable variable=GitVersion_MajorMinorPatch;isOutput=true]$(GitVersion_MajorMinorPatch)"
+              echo "##vso[task.setvariable variable=GitVersion_SemVer;isOutput=true]$(GitVersion_SemVer)"
+              echo "##vso[task.setvariable variable=GitVersion_AssemblySemVer;isOutput=true]$(GitVersion_AssemblySemVer)"
+              echo "##vso[task.setvariable variable=GitVersion_AssemblySemFileVer;isOutput=true]$(GitVersion_AssemblySemFileVer)"
+              echo "##vso[task.setvariable variable=GitVersion_InformationalVersion;isOutput=true]$(GitVersion_InformationalVersion)"
+              echo "##vso[build.updatebuildnumber]$(GitVersion_MajorMinorPatch)"
+            name: ExportVersions
+            displayName: 'Export GitVersion variables'
+
   # Test azure-cli.yml template
   # Note: The azure-cli.yml template requires a valid Azure service connection.
   # These tests verify the template structure and parameter handling without actual Azure operations.
   - stage: TestAzureCLI
     displayName: 'Test azure-cli.yml Template'
-    dependsOn: []
+    dependsOn: Setup
     jobs:
       - job: VerifyTemplateStructure
         displayName: 'Verify template structure and parameters'
@@ -128,7 +160,7 @@ stages:
   # Test use-template-files.yml template
   - stage: TestUseTemplateFiles
     displayName: 'Test use-template-files.yml Template'
-    dependsOn: []
+    dependsOn: Setup
     jobs:
       - job: TestCheckout
         displayName: 'Test repository checkout'
@@ -153,7 +185,7 @@ stages:
   # These tests verify the template's parameter validation logic.
   - stage: TestDocker
     displayName: 'Test docker.yml Template'
-    dependsOn: []
+    dependsOn: Setup
     jobs:
       - job: VerifyTemplateStructure
         displayName: 'Verify template structure'
@@ -249,26 +281,19 @@ stages:
   # Test build-dotnet.yml template
   - stage: TestBuildDotNet
     displayName: 'Test build-dotnet.yml Template'
-    dependsOn: []
+    dependsOn: Setup
+    variables:
+      GitVersion_MajorMinorPatch: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_MajorMinorPatch'] ]
+      GitVersion_SemVer: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_SemVer'] ]
+      GitVersion_AssemblySemVer: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_AssemblySemVer'] ]
+      GitVersion_AssemblySemFileVer: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_AssemblySemFileVer'] ]
+      GitVersion_InformationalVersion: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_InformationalVersion'] ]
     jobs:
       - job: RunBuildTemplate
         displayName: 'Run template against sample project'
         steps:
           - checkout: self
-            fetchDepth: 0 # Shallow Clone disabled to work with complicated branch structures
-            fetchTags: true # Ensure version source tags are available to GitVersion
             path: 's' # Force checkout to the 's' folder to allow multiple `- checkout:` steps in calling pipelines
-
-          - task: gitversion-setup@4
-            displayName: 'Install GitVersion'
-            inputs:
-              versionSpec: '6.x'
-
-          - task: gitversion-execute@4
-            displayName: 'Calculate SemVer'
-            inputs:
-              targetPath: '$(Build.Repository.LocalPath)'
-              buildNumberFormat: '${GitVersion_FullSemVer}'
 
           - template: pipelines/lib/build-dotnet.yml
             parameters:
@@ -282,7 +307,7 @@ stages:
   # Test PowerShell scripts used by templates
   - stage: TestScripts
     displayName: 'Test PowerShell Scripts'
-    dependsOn: []
+    dependsOn: Setup
     jobs:
       - job: TestInvokeTestRunner
         displayName: 'Test Invoke-TestRunner.ps1'
@@ -339,7 +364,7 @@ stages:
   # Integration test: Verify all templates are accessible
   - stage: VerifyTemplateAccessibility
     displayName: 'Verify All Templates Are Accessible'
-    dependsOn: []
+    dependsOn: Setup
     jobs:
       - job: ListTemplates
         displayName: 'List and verify all templates'
@@ -435,6 +460,8 @@ stages:
       - TestBuildDotNet
       - TestScripts
       - VerifyTemplateAccessibility
+    variables:
+      GitVersion_MajorMinorPatch: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_MajorMinorPatch'] ]
     condition: always()
     jobs:
       - job: Summary
@@ -495,7 +522,7 @@ stages:
                 $report = @"
                 # Azure Pipeline Templates - Test Report
                 
-                **Build:** [$(Build.BuildNumber)]($buildUrl)  
+                **Build:** [$(GitVersion_MajorMinorPatch)]($buildUrl)  
                 **Date:** $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")  
                 **Branch:** $(Build.SourceBranchName)  
                 **Commit:** $(Build.SourceVersion)  
@@ -597,7 +624,7 @@ stages:
                 
                 - **Pipeline:** $(Build.DefinitionName)
                 - **Build ID:** $(Build.BuildId)
-                - **Build Number:** $(Build.BuildNumber)
+                - **Build Number:** $(GitVersion_MajorMinorPatch)
                 - **Agent:** $(Agent.Name)
                 - **Agent OS:** $(Agent.OS)
                 
@@ -671,6 +698,8 @@ stages:
       - TestScripts
       - VerifyTemplateAccessibility
       - TestSummary
+    variables:
+      GitVersion_MajorMinorPatch: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_MajorMinorPatch'] ]
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - job: PublishRelease
@@ -679,14 +708,14 @@ stages:
           - checkout: none
 
           - task: GitHubRelease@1
-            displayName: 'Create GitHub release $(Build.BuildNumber)'
+            displayName: 'Create GitHub release $(GitVersion_MajorMinorPatch)'
             inputs:
               gitHubConnection: 'almguru'
               repositoryName: '$(Build.Repository.Name)'
               action: 'create'
               target: '$(Build.SourceVersion)'
               tagSource: 'userSpecifiedTag'
-              tag: 'v$(Build.BuildNumber)'
-              title: 'Release v$(Build.BuildNumber)'
+              tag: 'v$(GitVersion_MajorMinorPatch)'
+              title: 'Release v$(GitVersion_MajorMinorPatch)'
               releaseNotesSource: 'inline'
-              releaseNotes: 'Automated release created from build $(Build.BuildNumber)'
+              releaseNotes: 'Automated release created from build $(GitVersion_MajorMinorPatch)'
