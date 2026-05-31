@@ -256,6 +256,7 @@ stages:
         steps:
           - checkout: self
             fetchDepth: 0 # Shallow Clone disabled to work with complicated branch structures
+            fetchTags: true # Ensure version source tags are available to GitVersion
             path: 's' # Force checkout to the 's' folder to allow multiple `- checkout:` steps in calling pipelines
 
           - task: gitversion-setup@4
@@ -266,7 +267,7 @@ stages:
           - task: gitversion-execute@4
             displayName: 'Calculate SemVer'
             inputs:
-              targetPath: '$(Build.SourcesDirectory)'
+              targetPath: '$(Build.Repository.LocalPath)'
               buildNumberFormat: '${GitVersion_FullSemVer}'
 
           - template: pipelines/lib/build-dotnet.yml
