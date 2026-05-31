@@ -691,6 +691,7 @@ stages:
   - stage: CreateGitHubRelease
     displayName: 'Create GitHub Release'
     dependsOn:
+      - Setup
       - TestAzureCLI
       - TestUseTemplateFiles
       - TestDocker
