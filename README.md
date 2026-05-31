@@ -116,7 +116,7 @@ The testing pipeline runs automatically on:
 
 This ensures that all templates execute correctly and are ready for use in production pipelines.
 
-Successful builds from the `main` branch also create and tag a GitHub release by using `$(Build.BuildNumber)`. This repository's test pipeline uses the fixed GitHub service connection name `almguru` for that stage.
+Successful builds from the `main` branch also create and tag a GitHub release by using `$(GitVersion_MajorMinorPatch)` from the `Setup` stage. This repository's test pipeline uses the fixed GitHub service connection name `almguru` for that stage.
 
 ## Contributing
 
