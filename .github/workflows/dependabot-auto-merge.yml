@@ -15,10 +15,12 @@ jobs:
   auto-merge:
     name: Approve and enable auto-merge
     runs-on: ubuntu-latest
+    concurrency:
+      group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
 
     # Only act on genuine Dependabot PRs.
-    if: github.actor == 'dependabot[bot]'
-
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Fetch Dependabot metadata
         id: meta
