@@ -1,0 +1,137 @@
+name: Dependabot Auto-Merge
+
+# Triggered for every Dependabot PR event. Uses pull_request_target so the
+# GITHUB_TOKEN has write permissions while the code still runs in the base-
+# branch context (safe because we gate on github.actor == 'dependabot[bot]').
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Approve and enable auto-merge
+    runs-on: ubuntu-latest
+
+    # Only act on genuine Dependabot PRs.
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------------------------------------------------------------ #
+      # Risk assessment: approve patch/minor bumps, flag major for review.  #
+      # ------------------------------------------------------------------ #
+      - name: Evaluate update risk
+        id: risk
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          DEPENDENCY: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          echo "Dependency : $DEPENDENCY"
+          echo "Ecosystem  : $ECOSYSTEM"
+          echo "Update type: $UPDATE_TYPE"
+
+          case "$UPDATE_TYPE" in
+            version-update:semver-patch|version-update:semver-minor)
+              echo "safe=true"  >> "$GITHUB_OUTPUT"
+              echo "reason=routine $UPDATE_TYPE for $DEPENDENCY ($ECOSYSTEM)" >> "$GITHUB_OUTPUT"
+              ;;
+            version-update:semver-major)
+              echo "safe=false" >> "$GITHUB_OUTPUT"
+              echo "reason=major version bump for $DEPENDENCY requires manual review" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "safe=false" >> "$GITHUB_OUTPUT"
+              echo "reason=unrecognised update type '$UPDATE_TYPE' — manual review required" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      # ------------------------------------------------------------------ #
+      # Approve (idempotent — skips if github-actions[bot] already approved)#
+      # ------------------------------------------------------------------ #
+      - name: Approve PR
+        if: steps.risk.outputs.safe == 'true'
+        uses: actions/github-script@v7
+        env:
+          REASON: ${{ steps.risk.outputs.reason }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+
+            const alreadyApproved = reviews.data.some(
+              r => r.state === 'APPROVED' && r.user.login === 'github-actions[bot]'
+            );
+
+            if (alreadyApproved) {
+              core.info(`PR #${pr.number} already approved by github-actions[bot] — skipping.`);
+              await core.summary
+                .addHeading(`PR #${pr.number} — ${pr.title}`, 3)
+                .addRaw(`⏭️ Already approved. Ensuring auto-merge is enabled.\n`)
+                .write();
+            } else {
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                event: 'APPROVE',
+                body: `✅ Automatically approved: ${process.env.REASON}.`
+              });
+              core.info(`Approved PR #${pr.number}.`);
+              await core.summary
+                .addHeading(`PR #${pr.number} — ${pr.title}`, 3)
+                .addRaw(`✅ Approved: ${process.env.REASON}\n`)
+                .write();
+            }
+
+      # ------------------------------------------------------------------ #
+      # Enable auto-merge (idempotent — gh prints a notice if already set). #
+      # If the PR has conflicts or failing required checks the queue just    #
+      # waits; GitHub will merge automatically once everything is green.     #
+      # ------------------------------------------------------------------ #
+      - name: Enable auto-merge
+        if: steps.risk.outputs.safe == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if gh pr merge --auto --merge "$PR_URL" 2>&1; then
+            echo "Auto-merge enabled for $PR_URL"
+          else
+            echo "Auto-merge could not be enabled (may already be set or repo setting disabled)."
+          fi
+
+      # ------------------------------------------------------------------ #
+      # Report risky PRs in the job summary so reviewers are notified.      #
+      # ------------------------------------------------------------------ #
+      - name: Report skip reason
+        if: steps.risk.outputs.safe == 'false'
+        uses: actions/github-script@v7
+        env:
+          REASON: ${{ steps.risk.outputs.reason }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        with:
+          script: |
+            await core.summary
+              .addHeading(`PR #${process.env.PR_NUMBER} — ${process.env.PR_TITLE}`, 3)
+              .addRaw(`⚠️ Skipped: ${process.env.REASON}\n`)
+              .write();
+            core.notice(
+              `PR #${process.env.PR_NUMBER} left for manual review: ${process.env.REASON}`,
+              { title: 'Dependabot PR skipped' }
+            );
