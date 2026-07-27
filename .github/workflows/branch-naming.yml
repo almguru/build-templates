@@ -1,6 +1,6 @@
 permissions:
   contents: read
-  issues: write
+  pull-requests: write
 name: Branch Naming Convention
 
 on:
