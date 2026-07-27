@@ -69,13 +69,14 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
 
-            const reviews = await github.rest.pulls.listReviews({
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: pr.number
+              pull_number: pr.number,
+              per_page: 100
             });
 
-            const alreadyApproved = reviews.data.some(
+            const alreadyApproved = reviews.some(
               r => r.state === 'APPROVED' && r.user.login === 'github-actions[bot]'
             );
 
