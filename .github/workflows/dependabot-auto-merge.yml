@@ -113,9 +113,10 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           if gh pr merge --auto --merge "$PR_URL" 2>&1; then
-            echo "Auto-merge enabled for $PR_URL"
+            echo "Auto-merge enabled for $PR_URL" | tee -a "$GITHUB_STEP_SUMMARY"
           else
-            echo "Auto-merge could not be enabled (may already be set or repo setting disabled)."
+            echo "::notice title=Dependabot auto-merge::Auto-merge could not be enabled for $PR_URL (may already be set or repo setting disabled)."
+            echo "⚠️ Auto-merge could not be enabled for $PR_URL (may already be set or repo setting disabled)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       # ------------------------------------------------------------------ #
