@@ -230,27 +230,20 @@ steps:
       }
 
       $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
-      if ($buildVersionProperties -notmatch '^[A-Za-z0-9_.$();=+,-]+$') {
-          Write-Host "##vso[task.logissue type=error]buildVersionProperties can only contain MSBuild property assignments."
-          exit 1
-      }
-
       $buildNoRestoreArgument = [string]$env:ALMGURU_BUILD_NO_RESTORE_ARGUMENT
-      if ($buildNoRestoreArgument -notin @('', '--no-restore')) {
-          Write-Host "##vso[task.logissue type=error]buildNoRestoreArgument must be empty or '--no-restore'."
-          exit 1
-      }
-
       $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
-      if ($buildConfiguration -notmatch '^[A-Za-z0-9_.-]+$') {
-          Write-Host "##vso[task.logissue type=error]buildConfiguration can only contain letters, numbers, periods, underscores, and hyphens."
-          exit 1
-      }
-
       $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
-      if ($buildAdditionalArguments -match '[\r\n;&|`<>]') {
-          Write-Host "##vso[task.logissue type=error]buildAdditionalArguments contains unsupported shell metacharacters."
-          exit 1
+
+      foreach ($argument in @(
+          @{ Name = 'buildVersionProperties'; Value = $buildVersionProperties }
+          @{ Name = 'buildNoRestoreArgument'; Value = $buildNoRestoreArgument }
+          @{ Name = 'buildConfiguration'; Value = $buildConfiguration }
+          @{ Name = 'buildAdditionalArguments'; Value = $buildAdditionalArguments }
+      )) {
+          if ($argument.Value -match '[\r\n]') {
+              Write-Host "##vso[task.logissue type=error]$($argument.Name) cannot contain carriage return or newline characters."
+              exit 1
+          }
       }
 
       Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
