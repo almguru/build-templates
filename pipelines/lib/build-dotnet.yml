@@ -141,11 +141,17 @@ parameters:
   - name: buildNoRestoreArgument
     type: string
     default: ''
+    values:
+      - ''
+      - '--no-restore'
 
   # Build configuration (Debug or Release)
   - name: buildConfiguration
     type: string
     default: 'Release'
+    values:
+      - 'Debug'
+      - 'Release'
 
   # MSBuild properties for version injection during build. Uses GitVersion task variables
   - name: buildVersionProperties
@@ -214,6 +220,40 @@ steps:
 
   - ${{ parameters.beforeBuildSteps }}
 
+  - pwsh: |
+      function Set-SafePipelineVariable {
+          param(
+              [Parameter(Mandatory = $true)]
+              [string]$Name,
+
+              [AllowEmptyString()]
+              [string]$Value
+          )
+
+          $Value = [string]$Value
+          $escapedValue = $Value.Replace('%', '%AZP25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Host "##vso[task.setvariable variable=$Name]$escapedValue"
+      }
+
+      $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
+      if ($buildVersionProperties -notmatch '^[A-Za-z0-9_.$();=-]+$') {
+          Write-Host "##vso[task.logissue type=error]buildVersionProperties can only contain MSBuild property assignments."
+          exit 1
+      }
+
+      $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
+      if ($buildAdditionalArguments -match '[\r\n;&|`<>]') {
+          Write-Host "##vso[task.logissue type=error]buildAdditionalArguments contains unsupported shell metacharacters."
+          exit 1
+      }
+
+      Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
+      Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
+    displayName: 'Validate .NET command arguments'
+    env:
+      ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
+      ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
+
   - task: DotNetCoreCLI@2
     displayName: '.Net build'
     inputs:
@@ -222,8 +262,8 @@ steps:
       arguments: >
         ${{ parameters.buildNoRestoreArgument }}
         --configuration ${{ parameters.buildConfiguration }}
-        --property:"${{ parameters.buildVersionProperties }}"
-        ${{ parameters.buildAdditionalArguments }}
+        --property:"$(almguruBuildVersionProperties)"
+        $(almguruBuildAdditionalArguments)
         --property:UseArtifactsOutput=true
         --artifacts-path $(Build.BinariesDirectory)
 
@@ -240,8 +280,8 @@ steps:
             --no-build
             --no-restore
             --configuration ${{ parameters.buildConfiguration }}
-            --property:"${{ parameters.buildVersionProperties }}"
-            ${{ parameters.buildAdditionalArguments }}
+            --property:"$(almguruBuildVersionProperties)"
+            $(almguruBuildAdditionalArguments)
             --property:UseArtifactsOutput=true
             --artifacts-path $(Build.BinariesDirectory)
           zipAfterPublish: false
