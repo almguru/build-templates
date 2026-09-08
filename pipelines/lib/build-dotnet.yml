@@ -142,7 +142,7 @@ parameters:
     type: string
     default: ''
 
-  # Build configuration (Debug or Release)
+  # Build configuration (for example, Debug, Release, or a custom MSBuild configuration)
   - name: buildConfiguration
     type: string
     default: 'Release'
@@ -214,18 +214,80 @@ steps:
 
   - ${{ parameters.beforeBuildSteps }}
 
-  - script: |
-      echo "##[command]dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-      dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+  - pwsh: |
+      function Set-SafePipelineVariable {
+          param(
+              [Parameter(Mandatory = $true)]
+              [string]$Name,
+
+              [AllowEmptyString()]
+              [string]$Value
+          )
+
+          $Value = [string]$Value
+          $escapedValue = $Value.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Host "##vso[task.setvariable variable=$Name]$escapedValue"
+      }
+
+      $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
+      $buildNoRestoreArgument = [string]$env:ALMGURU_BUILD_NO_RESTORE_ARGUMENT
+      $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
+      $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
+
+      foreach ($argument in @(
+          @{ Name = 'buildVersionProperties'; Value = $buildVersionProperties }
+          @{ Name = 'buildNoRestoreArgument'; Value = $buildNoRestoreArgument }
+          @{ Name = 'buildConfiguration'; Value = $buildConfiguration }
+          @{ Name = 'buildAdditionalArguments'; Value = $buildAdditionalArguments }
+      )) {
+          if ($argument.Value -match '[\r\n]') {
+              Write-Host "##vso[task.logissue type=error]$($argument.Name) cannot contain carriage return or newline characters."
+              exit 1
+          }
+      }
+
+      Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
+      Set-SafePipelineVariable -Name 'almguruBuildNoRestoreArgument' -Value $buildNoRestoreArgument
+      Set-SafePipelineVariable -Name 'almguruBuildConfiguration' -Value $buildConfiguration
+      Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
+    displayName: 'Validate .NET command arguments'
+    env:
+      ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
+      ALMGURU_BUILD_NO_RESTORE_ARGUMENT: ${{ parameters.buildNoRestoreArgument }}
+      ALMGURU_BUILD_CONFIGURATION: ${{ parameters.buildConfiguration }}
+      ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
+
+  - task: DotNetCoreCLI@2
     displayName: '.Net build'
+    inputs:
+      command: 'build'
+      projects: ${{ parameters.buildSpec }}
+      arguments: >
+        $(almguruBuildNoRestoreArgument)
+        --configuration $(almguruBuildConfiguration)
+        --property:"$(almguruBuildVersionProperties)"
+        $(almguruBuildAdditionalArguments)
+        --property:UseArtifactsOutput=true
+        --artifacts-path $(Build.BinariesDirectory)
 
   - ${{ if eq(parameters.buildAction, 'publish') }}:
       - ${{ parameters.beforePublishSteps }}
 
-      - script: |
-          echo "##[command]dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-          dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+      - task: DotNetCoreCLI@2
         displayName: '.Net publish'
+        inputs:
+          command: 'publish'
+          publishWebProjects: false
+          projects: ${{ parameters.buildSpec }}
+          arguments: >
+            --no-build
+            --no-restore
+            --configuration $(almguruBuildConfiguration)
+            --property:"$(almguruBuildVersionProperties)"
+            $(almguruBuildAdditionalArguments)
+            --property:UseArtifactsOutput=true
+            --artifacts-path $(Build.BinariesDirectory)
+          zipAfterPublish: false
 
   - ${{ if parameters.zipAfterPublish }}:
       - powershell: |
