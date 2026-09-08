@@ -518,13 +518,14 @@ stages:
                 # Generate Markdown report
                 $reportPath = Join-Path $reportDir "test-report.md"
                 $buildUrl = "$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                $sourceBranchName = $env:BUILD_SOURCEBRANCHNAME -replace '\r?\n', ' '
                 
                 $report = @"
                 # Azure Pipeline Templates - Test Report
                 
                 **Build:** [$(GitVersion_MajorMinorPatch)]($buildUrl)  
                 **Date:** $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")  
-                **Branch:** $(Build.SourceBranchName)  
+                **Branch:** $sourceBranchName
                 **Commit:** $(Build.SourceVersion)  
                 
                 ---

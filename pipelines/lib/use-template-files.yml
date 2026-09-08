@@ -21,5 +21,8 @@ steps:
     displayName: 'Checkout template resources'
 
   - pwsh: |
-      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)$([System.IO.Path]::DirectorySeparatorChar)${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}"
+      $templateFilesPath = Join-Path -Path $env:PIPELINE_WORKSPACE -ChildPath $env:ALMGURU_TEMPLATE_REPOSITORY_PATH
+      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$templateFilesPath"
     displayName: 'Set template resources path variable'
+    env:
+      ALMGURU_TEMPLATE_REPOSITORY_PATH: ${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}

@@ -121,7 +121,7 @@ function Find-TestFiles {
         # We'll use -like with a pattern that matches the relative path from SearchPath
         $searchPattern = $patternWin -replace '\*\*[/\\]', '*\'
         
-        Write-Host "Searching for files matching pattern: $FilePattern in $SearchPath"
+        Write-Verbose "Searching for files matching pattern: $FilePattern in $SearchPath"
         
         # Get all files recursively and filter by matching the relative path
         $files = Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object {
@@ -146,11 +146,11 @@ function Find-TestFiles {
         # No wildcards - treat as direct path or file name
         $directFile = Join-Path -Path $SearchPath -ChildPath $FilePattern
         if (Test-Path $directFile) {
-            Write-Host "Found file by direct path: $directFile"
+            Write-Verbose "Found file by direct path: $directFile"
             return @(Get-Item $directFile)
         }
         else {
-            Write-Host "Attempting fallback search for file name '$FilePattern' in $SearchPath"
+            Write-Verbose "Attempting fallback search for file name '$FilePattern' in $SearchPath"
             return Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object { $_.Name -ieq $FilePattern }
         }
     }

@@ -214,18 +214,37 @@ steps:
 
   - ${{ parameters.beforeBuildSteps }}
 
-  - script: |
-      echo "##[command]dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-      dotnet build ${{ parameters.buildSpec }} ${{ parameters.buildNoRestoreArgument }} --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+  - task: DotNetCoreCLI@2
     displayName: '.Net build'
+    inputs:
+      command: 'build'
+      projects: ${{ parameters.buildSpec }}
+      arguments: >
+        ${{ parameters.buildNoRestoreArgument }}
+        --configuration ${{ parameters.buildConfiguration }}
+        --property:"${{ parameters.buildVersionProperties }}"
+        ${{ parameters.buildAdditionalArguments }}
+        --property:UseArtifactsOutput=true
+        --artifacts-path $(Build.BinariesDirectory)
 
   - ${{ if eq(parameters.buildAction, 'publish') }}:
       - ${{ parameters.beforePublishSteps }}
 
-      - script: |
-          echo "##[command]dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:\"${{ parameters.buildVersionProperties }}\" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-          dotnet publish ${{ parameters.buildSpec }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:"${{ parameters.buildVersionProperties }}" ${{ parameters.buildAdditionalArguments }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+      - task: DotNetCoreCLI@2
         displayName: '.Net publish'
+        inputs:
+          command: 'publish'
+          publishWebProjects: false
+          projects: ${{ parameters.buildSpec }}
+          arguments: >
+            --no-build
+            --no-restore
+            --configuration ${{ parameters.buildConfiguration }}
+            --property:"${{ parameters.buildVersionProperties }}"
+            ${{ parameters.buildAdditionalArguments }}
+            --property:UseArtifactsOutput=true
+            --artifacts-path $(Build.BinariesDirectory)
+          zipAfterPublish: false
 
   - ${{ if parameters.zipAfterPublish }}:
       - powershell: |
