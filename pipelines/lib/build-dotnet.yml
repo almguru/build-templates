@@ -230,8 +230,14 @@ steps:
       }
 
       $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
-      if ($buildVersionProperties -notmatch '^[A-Za-z0-9_.$();=-]+$') {
+      if ($buildVersionProperties -notmatch '^[A-Za-z0-9_.$();=+,-]+$') {
           Write-Host "##vso[task.logissue type=error]buildVersionProperties can only contain MSBuild property assignments."
+          exit 1
+      }
+
+      $buildNoRestoreArgument = [string]$env:ALMGURU_BUILD_NO_RESTORE_ARGUMENT
+      if ($buildNoRestoreArgument -notin @('', '--no-restore')) {
+          Write-Host "##vso[task.logissue type=error]buildNoRestoreArgument must be empty or '--no-restore'."
           exit 1
       }
 
@@ -242,10 +248,12 @@ steps:
       }
 
       Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
+      Set-SafePipelineVariable -Name 'almguruBuildNoRestoreArgument' -Value $buildNoRestoreArgument
       Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
     displayName: 'Validate .NET command arguments'
     env:
       ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
+      ALMGURU_BUILD_NO_RESTORE_ARGUMENT: ${{ parameters.buildNoRestoreArgument }}
       ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
 
   - task: DotNetCoreCLI@2
@@ -254,7 +262,7 @@ steps:
       command: 'build'
       projects: ${{ parameters.buildSpec }}
       arguments: >
-        ${{ parameters.buildNoRestoreArgument }}
+        $(almguruBuildNoRestoreArgument)
         --configuration ${{ parameters.buildConfiguration }}
         --property:"$(almguruBuildVersionProperties)"
         $(almguruBuildAdditionalArguments)
