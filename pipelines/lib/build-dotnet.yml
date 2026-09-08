@@ -241,6 +241,12 @@ steps:
           exit 1
       }
 
+      $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
+      if ($buildConfiguration -notmatch '^[A-Za-z0-9_.-]+$') {
+          Write-Host "##vso[task.logissue type=error]buildConfiguration can only contain letters, numbers, periods, underscores, and hyphens."
+          exit 1
+      }
+
       $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
       if ($buildAdditionalArguments -match '[\r\n;&|`<>]') {
           Write-Host "##vso[task.logissue type=error]buildAdditionalArguments contains unsupported shell metacharacters."
@@ -249,11 +255,13 @@ steps:
 
       Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
       Set-SafePipelineVariable -Name 'almguruBuildNoRestoreArgument' -Value $buildNoRestoreArgument
+      Set-SafePipelineVariable -Name 'almguruBuildConfiguration' -Value $buildConfiguration
       Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
     displayName: 'Validate .NET command arguments'
     env:
       ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
       ALMGURU_BUILD_NO_RESTORE_ARGUMENT: ${{ parameters.buildNoRestoreArgument }}
+      ALMGURU_BUILD_CONFIGURATION: ${{ parameters.buildConfiguration }}
       ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
 
   - task: DotNetCoreCLI@2
@@ -263,7 +271,7 @@ steps:
       projects: ${{ parameters.buildSpec }}
       arguments: >
         $(almguruBuildNoRestoreArgument)
-        --configuration ${{ parameters.buildConfiguration }}
+        --configuration $(almguruBuildConfiguration)
         --property:"$(almguruBuildVersionProperties)"
         $(almguruBuildAdditionalArguments)
         --property:UseArtifactsOutput=true
@@ -281,7 +289,7 @@ steps:
           arguments: >
             --no-build
             --no-restore
-            --configuration ${{ parameters.buildConfiguration }}
+            --configuration $(almguruBuildConfiguration)
             --property:"$(almguruBuildVersionProperties)"
             $(almguruBuildAdditionalArguments)
             --property:UseArtifactsOutput=true
