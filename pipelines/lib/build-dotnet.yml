@@ -141,17 +141,11 @@ parameters:
   - name: buildNoRestoreArgument
     type: string
     default: ''
-    values:
-      - ''
-      - '--no-restore'
 
-  # Build configuration (Debug or Release)
+  # Build configuration (for example, Debug, Release, or a custom MSBuild configuration)
   - name: buildConfiguration
     type: string
     default: 'Release'
-    values:
-      - 'Debug'
-      - 'Release'
 
   # MSBuild properties for version injection during build. Uses GitVersion task variables
   - name: buildVersionProperties
@@ -231,7 +225,7 @@ steps:
           )
 
           $Value = [string]$Value
-          $escapedValue = $Value.Replace('%', '%AZP25').Replace("`r", '%0D').Replace("`n", '%0A')
+          $escapedValue = $Value.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Host "##vso[task.setvariable variable=$Name]$escapedValue"
       }
 
