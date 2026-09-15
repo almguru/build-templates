@@ -47,7 +47,7 @@ A comprehensive template for building, testing, publishing, and packaging .NET p
 | `vstsFeed` | string | `'innersource'` | VSTS feed name when `feedsToUse` is `'select'` |
 | `testSpec` | string | `''` | Glob pattern to locate compiled test assemblies in artifacts (e.g., `'**/*Tests.dll'`, `'**/bin/Release/**/*Tests.dll'`) |
 | `unitTestArguments` | string | `''` | Additional arguments for `dotnet test` command |
-| `unitTestUseMicrosoftTestingPlatform` | boolean | `true` | Unit test runner mode: `true` for Microsoft Testing Platform (modern, direct CLI with TRX/Cobertura), `false` for DotNetCoreCLI task with VSTest mode (legacy projects, XPlat Code Coverage) |
+| `unitTestUseMicrosoftTestingPlatform` | boolean | `true` | Unit test runner mode: `true` for Microsoft Testing Platform (modern CLI with TRX/Cobertura), `false` for legacy `dotnet test` with VSTest and XPlat Code Coverage |
 | `dotNetUnitTestFilterOption` | string | `''` | Unit test filtering option for VSTest mode only (e.g., `'--filter "Category=Unit"'`). Only applied when `unitTestUseMicrosoftTestingPlatform` is `false` |
 | `beforeTestsSteps` | stepList | `[]` | Custom steps to execute before running tests |
 | `zipAfterPublish` | boolean | `true` | Whether to zip published output folders |
