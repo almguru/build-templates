@@ -230,16 +230,30 @@ steps:
       }
 
       $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
+      $buildSpec = [string]$env:ALMGURU_BUILD_SPEC
       $buildNoRestoreArgument = [string]$env:ALMGURU_BUILD_NO_RESTORE_ARGUMENT
       $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
       $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
+      $testSpec = [string]$env:ALMGURU_TEST_SPEC
+      $unitTestArguments = [string]$env:ALMGURU_UNIT_TEST_ARGUMENTS
+      $unitTestUseMicrosoftTestingPlatform = [System.Convert]::ToBoolean([string]$env:ALMGURU_UNIT_TEST_USE_MICROSOFT_TESTING_PLATFORM)
 
-      foreach ($argument in @(
+      $arguments = @(
           @{ Name = 'buildVersionProperties'; Value = $buildVersionProperties }
+          @{ Name = 'buildSpec'; Value = $buildSpec }
           @{ Name = 'buildNoRestoreArgument'; Value = $buildNoRestoreArgument }
           @{ Name = 'buildConfiguration'; Value = $buildConfiguration }
           @{ Name = 'buildAdditionalArguments'; Value = $buildAdditionalArguments }
-      )) {
+      )
+
+      if ($unitTestUseMicrosoftTestingPlatform) {
+          $arguments += @(
+              @{ Name = 'testSpec'; Value = $testSpec }
+              @{ Name = 'unitTestArguments'; Value = $unitTestArguments }
+          )
+      }
+
+      foreach ($argument in $arguments) {
           if ($argument.Value -match '[\r\n]') {
               Write-Host "##vso[task.logissue type=error]$($argument.Name) cannot contain carriage return or newline characters."
               exit 1
@@ -247,47 +261,35 @@ steps:
       }
 
       Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
+      Set-SafePipelineVariable -Name 'almguruBuildSpec' -Value $buildSpec
       Set-SafePipelineVariable -Name 'almguruBuildNoRestoreArgument' -Value $buildNoRestoreArgument
       Set-SafePipelineVariable -Name 'almguruBuildConfiguration' -Value $buildConfiguration
       Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
+      Set-SafePipelineVariable -Name 'almguruTestSpec' -Value $testSpec
+      Set-SafePipelineVariable -Name 'almguruUnitTestArguments' -Value $unitTestArguments
     displayName: 'Validate .NET command arguments'
     env:
       ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
+      ALMGURU_BUILD_SPEC: ${{ parameters.buildSpec }}
       ALMGURU_BUILD_NO_RESTORE_ARGUMENT: ${{ parameters.buildNoRestoreArgument }}
       ALMGURU_BUILD_CONFIGURATION: ${{ parameters.buildConfiguration }}
       ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
+      ALMGURU_TEST_SPEC: ${{ parameters.testSpec }}
+      ALMGURU_UNIT_TEST_ARGUMENTS: ${{ parameters.unitTestArguments }}
+      ALMGURU_UNIT_TEST_USE_MICROSOFT_TESTING_PLATFORM: ${{ parameters.unitTestUseMicrosoftTestingPlatform }}
 
-  - task: DotNetCoreCLI@2
+  - script: |
+      echo "##[command]dotnet build $(almguruBuildSpec) $(almguruBuildNoRestoreArgument) --configuration $(almguruBuildConfiguration) --property:\"$(almguruBuildVersionProperties)\" $(almguruBuildAdditionalArguments) --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
+      dotnet build $(almguruBuildSpec) $(almguruBuildNoRestoreArgument) --configuration $(almguruBuildConfiguration) --property:"$(almguruBuildVersionProperties)" $(almguruBuildAdditionalArguments) --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
     displayName: '.Net build'
-    inputs:
-      command: 'build'
-      projects: ${{ parameters.buildSpec }}
-      arguments: >
-        $(almguruBuildNoRestoreArgument)
-        --configuration $(almguruBuildConfiguration)
-        --property:"$(almguruBuildVersionProperties)"
-        $(almguruBuildAdditionalArguments)
-        --property:UseArtifactsOutput=true
-        --artifacts-path $(Build.BinariesDirectory)
 
   - ${{ if eq(parameters.buildAction, 'publish') }}:
       - ${{ parameters.beforePublishSteps }}
 
-      - task: DotNetCoreCLI@2
+      - script: |
+          echo "##[command]dotnet publish $(almguruBuildSpec) --no-build --no-restore --configuration $(almguruBuildConfiguration) --property:\"$(almguruBuildVersionProperties)\" $(almguruBuildAdditionalArguments) --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
+          dotnet publish $(almguruBuildSpec) --no-build --no-restore --configuration $(almguruBuildConfiguration) --property:"$(almguruBuildVersionProperties)" $(almguruBuildAdditionalArguments) --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
         displayName: '.Net publish'
-        inputs:
-          command: 'publish'
-          publishWebProjects: false
-          projects: ${{ parameters.buildSpec }}
-          arguments: >
-            --no-build
-            --no-restore
-            --configuration $(almguruBuildConfiguration)
-            --property:"$(almguruBuildVersionProperties)"
-            $(almguruBuildAdditionalArguments)
-            --property:UseArtifactsOutput=true
-            --artifacts-path $(Build.BinariesDirectory)
-          zipAfterPublish: false
 
   - ${{ if parameters.zipAfterPublish }}:
       - powershell: |
@@ -305,8 +307,8 @@ steps:
 
   - ${{ if parameters.unitTestUseMicrosoftTestingPlatform }}:
     - script: |
-        echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}"
-        dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}
+        echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules $(almguruTestSpec) --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml $(almguruUnitTestArguments)"
+        dotnet test --root-directory $(Build.BinariesDirectory) --test-modules $(almguruTestSpec) --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml $(almguruUnitTestArguments)
       displayName: '.Net test'
 
     - task: PublishTestResults@2
