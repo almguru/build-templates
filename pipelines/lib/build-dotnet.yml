@@ -306,25 +306,39 @@ steps:
         dotnet test --root-directory $(Build.BinariesDirectory) --test-modules $(almguruTestSpec) --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml $(almguruUnitTestArguments)
       displayName: '.Net test'
 
-  - ${{ if not(parameters.unitTestUseMicrosoftTestingPlatform) }}:
-    - script: |
-        echo "##[command]dotnet test $(almguruTestSpec) --no-build --configuration $(almguruBuildConfiguration) --property:\"$(almguruBuildVersionProperties)\" --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory) $(almguruBuildAdditionalArguments) $(almguruDotNetUnitTestFilterOption) --collect \"XPlat Code Coverage\" --logger trx --results-directory $(Agent.TempDirectory) -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura $(almguruUnitTestArguments)"
-        dotnet test $(almguruTestSpec) --no-build --configuration $(almguruBuildConfiguration) --property:"$(almguruBuildVersionProperties)" --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory) $(almguruBuildAdditionalArguments) $(almguruDotNetUnitTestFilterOption) --collect "XPlat Code Coverage" --logger trx --results-directory $(Agent.TempDirectory) -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura $(almguruUnitTestArguments)
-      displayName: 'Run unit tests'
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      inputs:
+        testRunTitle: 'Unit tests (.Net)'
+        searchFolder: '$(Agent.TempDirectory)'
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '**/*.trx'
+        mergeTestResults: true
+        failTaskOnMissingResultsFiles: true
+        failTaskOnFailedTests: true
+        failTaskOnFailureToPublishResults: true
+        publishRunAttachments: true
+      displayName: 'Publish unit tests results'
 
-  - task: PublishTestResults@2
-    condition: succeededOrFailed()
-    inputs:
-      testRunTitle: 'Unit tests (.Net)'
-      searchFolder: '$(Agent.TempDirectory)'
-      testResultsFormat: 'VSTest'
-      testResultsFiles: '**/*.trx'
-      mergeTestResults: true
-      failTaskOnMissingResultsFiles: true
-      failTaskOnFailedTests: true
-      failTaskOnFailureToPublishResults: true
-      publishRunAttachments: true
-    displayName: 'Publish unit tests results'
+  - ${{ if not(parameters.unitTestUseMicrosoftTestingPlatform) }}:
+    - task: DotNetCoreCLI@2
+      displayName: 'Run unit tests'
+      inputs:
+        command: 'test'
+        projects: '${{ parameters.testSpec }}'
+        arguments: >
+          --no-build
+          --configuration ${{ parameters.buildConfiguration }}
+          --property:"${{ parameters.buildVersionProperties }}"
+          --property:UseArtifactsOutput=true
+          --artifacts-path $(Build.BinariesDirectory)
+          ${{ parameters.buildAdditionalArguments }}
+          ${{ parameters.dotNetUnitTestFilterOption }}
+          --collect "XPlat Code Coverage"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+          ${{ parameters.unitTestArguments }}
+        publishTestResults: true
+        testRunTitle: 'Unit tests (.Net)'
 
   - ${{ if ne(parameters.signFiles, '') }}:
       - task: AzureKeyVault@1
