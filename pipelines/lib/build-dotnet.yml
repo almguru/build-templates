@@ -235,19 +235,25 @@ steps:
       $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
       $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
       $testSpec = [string]$env:ALMGURU_TEST_SPEC
-      $dotNetUnitTestFilterOption = [string]$env:ALMGURU_DOTNET_UNIT_TEST_FILTER_OPTION
       $unitTestArguments = [string]$env:ALMGURU_UNIT_TEST_ARGUMENTS
+      $unitTestUseMicrosoftTestingPlatform = [System.Convert]::ToBoolean([string]$env:ALMGURU_UNIT_TEST_USE_MICROSOFT_TESTING_PLATFORM)
 
-      foreach ($argument in @(
+      $arguments = @(
           @{ Name = 'buildVersionProperties'; Value = $buildVersionProperties }
           @{ Name = 'buildSpec'; Value = $buildSpec }
           @{ Name = 'buildNoRestoreArgument'; Value = $buildNoRestoreArgument }
           @{ Name = 'buildConfiguration'; Value = $buildConfiguration }
           @{ Name = 'buildAdditionalArguments'; Value = $buildAdditionalArguments }
-          @{ Name = 'testSpec'; Value = $testSpec }
-          @{ Name = 'dotNetUnitTestFilterOption'; Value = $dotNetUnitTestFilterOption }
-          @{ Name = 'unitTestArguments'; Value = $unitTestArguments }
-      )) {
+      )
+
+      if ($unitTestUseMicrosoftTestingPlatform) {
+          $arguments += @(
+              @{ Name = 'testSpec'; Value = $testSpec }
+              @{ Name = 'unitTestArguments'; Value = $unitTestArguments }
+          )
+      }
+
+      foreach ($argument in $arguments) {
           if ($argument.Value -match '[\r\n]') {
               Write-Host "##vso[task.logissue type=error]$($argument.Name) cannot contain carriage return or newline characters."
               exit 1
@@ -260,7 +266,6 @@ steps:
       Set-SafePipelineVariable -Name 'almguruBuildConfiguration' -Value $buildConfiguration
       Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
       Set-SafePipelineVariable -Name 'almguruTestSpec' -Value $testSpec
-      Set-SafePipelineVariable -Name 'almguruDotNetUnitTestFilterOption' -Value $dotNetUnitTestFilterOption
       Set-SafePipelineVariable -Name 'almguruUnitTestArguments' -Value $unitTestArguments
     displayName: 'Validate .NET command arguments'
     env:
@@ -270,8 +275,8 @@ steps:
       ALMGURU_BUILD_CONFIGURATION: ${{ parameters.buildConfiguration }}
       ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
       ALMGURU_TEST_SPEC: ${{ parameters.testSpec }}
-      ALMGURU_DOTNET_UNIT_TEST_FILTER_OPTION: ${{ parameters.dotNetUnitTestFilterOption }}
       ALMGURU_UNIT_TEST_ARGUMENTS: ${{ parameters.unitTestArguments }}
+      ALMGURU_UNIT_TEST_USE_MICROSOFT_TESTING_PLATFORM: ${{ parameters.unitTestUseMicrosoftTestingPlatform }}
 
   - script: |
       echo "##[command]dotnet build $(almguruBuildSpec) $(almguruBuildNoRestoreArgument) --configuration $(almguruBuildConfiguration) --property:\"$(almguruBuildVersionProperties)\" $(almguruBuildAdditionalArguments) --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
