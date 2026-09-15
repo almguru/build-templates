@@ -21,5 +21,45 @@ steps:
     displayName: 'Checkout template resources'
 
   - pwsh: |
-      Write-Host "##vso[task.setvariable variable=almguruTemplateFilesPath]$(Pipeline.Workspace)$([System.IO.Path]::DirectorySeparatorChar)${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}"
+      function Set-SafePipelineVariable {
+          param(
+              [Parameter(Mandatory = $true)]
+              [string]$Name,
+
+              [Parameter(Mandatory = $true)]
+              [string]$Value
+          )
+
+          $escapedValue = $Value.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Host "##vso[task.setvariable variable=$Name]$escapedValue"
+      }
+
+      $repositoryRelativePath = [string]$env:ALMGURU_TEMPLATE_REPOSITORY_PATH
+      if ([string]::IsNullOrWhiteSpace($repositoryRelativePath)) {
+          throw 'ALMGURU_TEMPLATE_REPOSITORY_PATH cannot be empty.'
+      }
+
+      if ($repositoryRelativePath.StartsWith('/') -or $repositoryRelativePath.StartsWith('\\') -or $repositoryRelativePath -match '^[A-Za-z]:([\\/]|$)' -or [System.IO.Path]::IsPathRooted($repositoryRelativePath)) {
+          throw "ALMGURU_TEMPLATE_REPOSITORY_PATH '$repositoryRelativePath' must be a relative path."
+      }
+
+      $invalidSegments = @(
+          $repositoryRelativePath -split '[\\/]+' |
+          Where-Object { $_ -eq '..' }
+      )
+      if ($invalidSegments.Count -gt 0) {
+          throw "ALMGURU_TEMPLATE_REPOSITORY_PATH '$repositoryRelativePath' cannot contain '..' segments."
+      }
+
+      $pipelineWorkspace = [System.IO.Path]::GetFullPath([string]$env:PIPELINE_WORKSPACE)
+      $fullTemplateFilesPath = [System.IO.Path]::GetFullPath((Join-Path -Path $pipelineWorkspace -ChildPath $repositoryRelativePath))
+      $workspacePrefix = $pipelineWorkspace.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+      $pathSeparator = [System.IO.Path]::DirectorySeparatorChar
+      if ($fullTemplateFilesPath -ne $workspacePrefix -and -not $fullTemplateFilesPath.StartsWith("$workspacePrefix$pathSeparator", [System.StringComparison]::OrdinalIgnoreCase)) {
+          throw "ALMGURU_TEMPLATE_REPOSITORY_PATH '$repositoryRelativePath' resolves outside of PIPELINE_WORKSPACE."
+      }
+
+      Set-SafePipelineVariable -Name 'almguruTemplateFilesPath' -Value $fullTemplateFilesPath
     displayName: 'Set template resources path variable'
+    env:
+      ALMGURU_TEMPLATE_REPOSITORY_PATH: ${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}

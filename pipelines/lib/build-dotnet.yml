@@ -214,22 +214,80 @@ steps:
 
   - ${{ parameters.beforeBuildSteps }}
 
-  - script: |
-      # Template parameters are expanded inline for the original lightweight dotnet invocation.
-      # Replace CR/LF so parameter values cannot add extra shell commands on following lines.
-      echo "##[command]dotnet build ${{ replace(replace(parameters.buildSpec, '\r', ' '), '\n', ' ') }} ${{ replace(replace(parameters.buildNoRestoreArgument, '\r', ' '), '\n', ' ') }} --configuration ${{ parameters.buildConfiguration }} --property:\"${{ replace(replace(parameters.buildVersionProperties, '\r', ' '), '\n', ' ') }}\" ${{ replace(replace(parameters.buildAdditionalArguments, '\r', ' '), '\n', ' ') }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-      dotnet build ${{ replace(replace(parameters.buildSpec, '\r', ' '), '\n', ' ') }} ${{ replace(replace(parameters.buildNoRestoreArgument, '\r', ' '), '\n', ' ') }} --configuration ${{ parameters.buildConfiguration }} --property:"${{ replace(replace(parameters.buildVersionProperties, '\r', ' '), '\n', ' ') }}" ${{ replace(replace(parameters.buildAdditionalArguments, '\r', ' '), '\n', ' ') }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+  - pwsh: |
+      function Set-SafePipelineVariable {
+          param(
+              [Parameter(Mandatory = $true)]
+              [string]$Name,
+
+              [AllowEmptyString()]
+              [string]$Value
+          )
+
+          $Value = [string]$Value
+          $escapedValue = $Value.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Host "##vso[task.setvariable variable=$Name]$escapedValue"
+      }
+
+      $buildVersionProperties = [string]$env:ALMGURU_BUILD_VERSION_PROPERTIES
+      $buildNoRestoreArgument = [string]$env:ALMGURU_BUILD_NO_RESTORE_ARGUMENT
+      $buildConfiguration = [string]$env:ALMGURU_BUILD_CONFIGURATION
+      $buildAdditionalArguments = [string]$env:ALMGURU_BUILD_ADDITIONAL_ARGUMENTS
+
+      foreach ($argument in @(
+          @{ Name = 'buildVersionProperties'; Value = $buildVersionProperties }
+          @{ Name = 'buildNoRestoreArgument'; Value = $buildNoRestoreArgument }
+          @{ Name = 'buildConfiguration'; Value = $buildConfiguration }
+          @{ Name = 'buildAdditionalArguments'; Value = $buildAdditionalArguments }
+      )) {
+          if ($argument.Value -match '[\r\n]') {
+              Write-Host "##vso[task.logissue type=error]$($argument.Name) cannot contain carriage return or newline characters."
+              exit 1
+          }
+      }
+
+      Set-SafePipelineVariable -Name 'almguruBuildVersionProperties' -Value $buildVersionProperties
+      Set-SafePipelineVariable -Name 'almguruBuildNoRestoreArgument' -Value $buildNoRestoreArgument
+      Set-SafePipelineVariable -Name 'almguruBuildConfiguration' -Value $buildConfiguration
+      Set-SafePipelineVariable -Name 'almguruBuildAdditionalArguments' -Value $buildAdditionalArguments
+    displayName: 'Validate .NET command arguments'
+    env:
+      ALMGURU_BUILD_VERSION_PROPERTIES: ${{ parameters.buildVersionProperties }}
+      ALMGURU_BUILD_NO_RESTORE_ARGUMENT: ${{ parameters.buildNoRestoreArgument }}
+      ALMGURU_BUILD_CONFIGURATION: ${{ parameters.buildConfiguration }}
+      ALMGURU_BUILD_ADDITIONAL_ARGUMENTS: ${{ parameters.buildAdditionalArguments }}
+
+  - task: DotNetCoreCLI@2
     displayName: '.Net build'
+    inputs:
+      command: 'build'
+      projects: ${{ parameters.buildSpec }}
+      arguments: >
+        $(almguruBuildNoRestoreArgument)
+        --configuration $(almguruBuildConfiguration)
+        --property:"$(almguruBuildVersionProperties)"
+        $(almguruBuildAdditionalArguments)
+        --property:UseArtifactsOutput=true
+        --artifacts-path $(Build.BinariesDirectory)
 
   - ${{ if eq(parameters.buildAction, 'publish') }}:
       - ${{ parameters.beforePublishSteps }}
 
-      - script: |
-          # Template parameters are expanded inline for the original lightweight dotnet invocation.
-          # Replace CR/LF so parameter values cannot add extra shell commands on following lines.
-          echo "##[command]dotnet publish ${{ replace(replace(parameters.buildSpec, '\r', ' '), '\n', ' ') }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:\"${{ replace(replace(parameters.buildVersionProperties, '\r', ' '), '\n', ' ') }}\" ${{ replace(replace(parameters.buildAdditionalArguments, '\r', ' '), '\n', ' ') }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)"
-          dotnet publish ${{ replace(replace(parameters.buildSpec, '\r', ' '), '\n', ' ') }} --no-build --no-restore --configuration ${{ parameters.buildConfiguration }} --property:"${{ replace(replace(parameters.buildVersionProperties, '\r', ' '), '\n', ' ') }}" ${{ replace(replace(parameters.buildAdditionalArguments, '\r', ' '), '\n', ' ') }} --property:UseArtifactsOutput=true --artifacts-path $(Build.BinariesDirectory)
+      - task: DotNetCoreCLI@2
         displayName: '.Net publish'
+        inputs:
+          command: 'publish'
+          publishWebProjects: false
+          projects: ${{ parameters.buildSpec }}
+          arguments: >
+            --no-build
+            --no-restore
+            --configuration $(almguruBuildConfiguration)
+            --property:"$(almguruBuildVersionProperties)"
+            $(almguruBuildAdditionalArguments)
+            --property:UseArtifactsOutput=true
+            --artifacts-path $(Build.BinariesDirectory)
+          zipAfterPublish: false
 
   - ${{ if parameters.zipAfterPublish }}:
       - powershell: |
@@ -247,9 +305,8 @@ steps:
 
   - ${{ if parameters.unitTestUseMicrosoftTestingPlatform }}:
     - script: |
-        # Replace CR/LF so test parameters cannot add extra shell commands on following lines.
-        echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ replace(replace(parameters.testSpec, '\r', ' '), '\n', ' ') }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ replace(replace(parameters.unitTestArguments, '\r', ' '), '\n', ' ') }}"
-        dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ replace(replace(parameters.testSpec, '\r', ' '), '\n', ' ') }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ replace(replace(parameters.unitTestArguments, '\r', ' '), '\n', ' ') }}
+        echo "##[command]dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}"
+        dotnet test --root-directory $(Build.BinariesDirectory) --test-modules ${{ parameters.testSpec }} --results-directory $(Agent.TempDirectory) --report-trx --coverage --coverage-output-format cobertura --coverage-output cobertura-coverage.xml ${{ parameters.unitTestArguments }}
       displayName: '.Net test'
 
     - task: PublishTestResults@2
@@ -303,7 +360,7 @@ steps:
           $codeSigningCerts = $signingCerts | Where-Object { ($_.Extensions | Where-Object { $_.CertificateAuthority }).Count -eq 0 }
 
           if ($codeSigningCerts.Count -eq 1) {
-              Get-ChildItem -Path '$(Build.BinariesDirectory)/*' -Include ${{ replace(replace(parameters.signFiles, '\r', ' '), '\n', ' ') }} -Recurse | ForEach-Object {
+              Get-ChildItem -Path '$(Build.BinariesDirectory)/*' -Include ${{ parameters.signFiles }} -Recurse | ForEach-Object {
                   Write-Host "##[command]Set-AuthenticodeSignature -FilePath $_ -Certificate '****' -IncludeChain All -TimestampServer http://timestamp.digicert.com -Verbose | Format-List"
                   Set-AuthenticodeSignature -FilePath "$_" -Certificate $codeSigningCerts[0] -IncludeChain All -TimestampServer http://timestamp.digicert.com -Verbose | Format-List
               }
