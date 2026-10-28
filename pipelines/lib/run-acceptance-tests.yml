@@ -227,7 +227,7 @@ steps:
       - ${{ if ne(parameters.azureSubscription, '') }}:
           - template: azure-cli.yml
             parameters:
-              azureSubscription: '${{ parameters.azureSubscription }}'
+              serviceConnection: '${{ parameters.azureSubscription }}'
               defaultScriptType: 'pscore'
               script:
                 type: 'pscore'

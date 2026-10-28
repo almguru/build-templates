@@ -192,10 +192,16 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `azureSubscription` | string | `''` | Azure service connection name |
+| `connectionType` | string | `'azureRM'` | Service connection type: `azureRM` (Azure Resource Manager) or `azureDevOps` (Azure DevOps) |
+| `serviceConnection` | string | `''` | Service connection name matching `connectionType` |
+| `azureSubscription` | string | `''` | **Obsolete legacy parameter.** Azure RM fallback when `serviceConnection` is empty; may be removed in future versions |
 | `defaultDisplayName` | string | `'Azure CLI script'` | Default display name for the task |
 | `defaultScriptType` | string | `'bash'` | Default script type (`bash`, `ps`, `pscore`, `batch`) |
 | `script` | object | `{}` | Script configuration object |
+
+The template uses [`AzureCLI@3`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/azure-cli-v3?view=azure-pipelines). `connectionType` defaults to `azureRM`; the template passes `serviceConnection` to the task's `azureSubscription` input for `azureRM`, or to `azureDevOpsServiceConnection` for `azureDevOps`. Ensure the named service connection matches the selected type. Azure DevOps connections use workload identity.
+
+For Azure RM callers, `azureSubscription` remains supported as an obsolete parameter for backward compatibility and may be removed in future versions. Prefer `serviceConnection` for all new and updated pipelines. When both `serviceConnection` and `azureSubscription` are set, `serviceConnection` takes precedence; `azureSubscription` is used only when `serviceConnection` is empty. Azure DevOps mode uses `serviceConnection`.
 
 ### Script Object Properties
 
@@ -214,7 +220,7 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
 ```yaml
 - template: pipelines/lib/azure-cli.yml@almguru-templates
   parameters:
-    azureSubscription: 'my-azure-connection'
+    serviceConnection: 'my-azure-connection'
     script:
       type: 'bash'
       location: 'inlineScript'
@@ -222,6 +228,20 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
         az group list --output table
         az account show
       displayName: 'List Resource Groups'
+```
+
+To use an Azure DevOps service connection instead:
+
+```yaml
+- template: pipelines/lib/azure-cli.yml@almguru-templates
+  parameters:
+    connectionType: 'azureDevOps'
+    serviceConnection: 'my-azure-devops-connection'
+    script:
+      type: 'bash'
+      location: 'inlineScript'
+      script: |
+        az devops project list --organization https://dev.azure.com/my-organization
 ```
 
 ## Bicep Deploy Template
