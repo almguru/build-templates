@@ -209,7 +209,7 @@ steps:
 - ${{ if or(and(or(eq(parameters.deploymentScope, 'ResourceGroup'), eq(parameters.deploymentScope, 'Subscription')), eq(parameters.subscriptionId, '')), and(eq(parameters.deploymentScope, 'Tenant'), eq(parameters.tenantId, ''))) }}:
   - template: azure-cli.yml
     parameters:
-      azureSubscription: ${{ parameters.azureSubscription }}
+      serviceConnection: ${{ parameters.azureSubscription }}
       script:
         type: "pscore"
         script: |
