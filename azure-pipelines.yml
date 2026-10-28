@@ -91,8 +91,7 @@ stages:
                 # Verify required parameters exist in template
                 $requiredElements = @(
                     'AzureCLI@3',
-                    'azureSubscription',
-                    'azureDevOpsServiceConnection',
+                    'serviceConnection',
                     'connectionType',
                     "default: 'azureRM'",
                     'defaultDisplayName',
@@ -109,9 +108,12 @@ stages:
                     Write-Host "✓ Found required element: $element"
                 }
 
+                $serviceConnectionReference = '$' + '{{ parameters.serviceConnection }}'
                 foreach ($connectionInput in @(
                     "if eq(parameters.connectionType, 'azureRM')",
-                    "if eq(parameters.connectionType, 'azureDevOps')"
+                    "if eq(parameters.connectionType, 'azureDevOps')",
+                    "azureSubscription: '$serviceConnectionReference'",
+                    "azureDevOpsServiceConnection: '$serviceConnectionReference'"
                 )) {
                     if (-not $content.Contains($connectionInput)) {
                         Write-Host "##vso[task.logissue type=error]Missing conditional connection input: $connectionInput"
@@ -432,7 +434,7 @@ stages:
 
           - template: pipelines/lib/azure-cli.yml
             parameters:
-              azureSubscription: 'public-templates'
+              serviceConnection: 'public-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'
@@ -441,7 +443,7 @@ stages:
           - template: pipelines/lib/azure-cli.yml
             parameters:
               connectionType: 'azureDevOps'
-              azureDevOpsServiceConnection: 'public-devops-templates'
+              serviceConnection: 'public-devops-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'

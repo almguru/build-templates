@@ -193,13 +193,14 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `connectionType` | string | `'azureRM'` | Service connection type: `azureRM` (Azure Resource Manager) or `azureDevOps` (Azure DevOps) |
-| `azureSubscription` | string | `''` | Azure Resource Manager service connection name; used when `connectionType` is `azureRM` |
-| `azureDevOpsServiceConnection` | string | `''` | Azure DevOps service connection name; used when `connectionType` is `azureDevOps` |
+| `serviceConnection` | string | `''` | Service connection name matching `connectionType` |
 | `defaultDisplayName` | string | `'Azure CLI script'` | Default display name for the task |
 | `defaultScriptType` | string | `'bash'` | Default script type (`bash`, `ps`, `pscore`, `batch`) |
 | `script` | object | `{}` | Script configuration object |
 
-The template uses [`AzureCLI@3`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/azure-cli-v3?view=azure-pipelines). The default `azureRM` connection type preserves the existing `azureSubscription` parameter and Azure Resource Manager behavior. Select `azureDevOps` to authenticate with an Azure DevOps workload-identity service connection; in that case, provide `azureDevOpsServiceConnection` instead.
+The template uses [`AzureCLI@3`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/azure-cli-v3?view=azure-pipelines). `connectionType` defaults to `azureRM`; the template passes `serviceConnection` to the task's `azureSubscription` input for `azureRM`, or to `azureDevOpsServiceConnection` for `azureDevOps`. Ensure the named service connection matches the selected type. Azure DevOps connections use workload identity.
+
+When migrating from the previous template parameter, rename `azureSubscription` to `serviceConnection`. Existing callers that omit `connectionType` continue to use Azure Resource Manager by default.
 
 ### Script Object Properties
 
@@ -218,7 +219,7 @@ The template uses [`AzureCLI@3`](https://learn.microsoft.com/en-us/azure/devops/
 ```yaml
 - template: pipelines/lib/azure-cli.yml@almguru-templates
   parameters:
-    azureSubscription: 'my-azure-connection'
+    serviceConnection: 'my-azure-connection'
     script:
       type: 'bash'
       location: 'inlineScript'
@@ -234,7 +235,7 @@ To use an Azure DevOps service connection instead:
 - template: pipelines/lib/azure-cli.yml@almguru-templates
   parameters:
     connectionType: 'azureDevOps'
-    azureDevOpsServiceConnection: 'my-azure-devops-connection'
+    serviceConnection: 'my-azure-devops-connection'
     script:
       type: 'bash'
       location: 'inlineScript'
