@@ -346,7 +346,7 @@ steps:
         testRunTitle: 'Unit tests (.Net)'
 
   - ${{ if ne(parameters.signFiles, '') }}:
-      - task: AzureKeyVault@1
+      - task: AzureKeyVault@2
         displayName: 'Get code signing certificate from Azure Key Vault'
         inputs:
           azureSubscription: '${{ parameters.codeSigningServiceConnection }}'
