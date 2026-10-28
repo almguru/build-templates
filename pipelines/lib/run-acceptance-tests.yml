@@ -22,7 +22,7 @@
 #   parameters:
 #     environmentName: 'Development'
 #     runtimeType: 'dotnet'
-#     runtimeVersion: '9.x'
+#     runtimeVersion: '10.x'
 #     suiteName: 'API Tests'
 #     files: '**/*AcceptanceTests.dll'
 #
@@ -112,7 +112,7 @@ parameters:
       - 'dotnet'
       - 'pester'
 
-  # .NET SDK version (e.g., '9.x'), or Pester 'latest' / exact stable version >= 5.
+  # .NET SDK version (default '10.x'), or Pester 'latest' / exact stable version >= 5.
   # Empty uses the runtime default; Pester latest follows stable releases across majors.
   - name: runtimeVersion
     type: string
@@ -154,7 +154,7 @@ parameters:
 
       - name: 'dotnet'
         runCmd: 'dotnet'
-        version: '9.x'
+        version: '10.x'
         resultsFormatName: 'VSTest'
         resultsFilePattern: '**/*.trx'
         resultsArguments: '--report-trx --results-directory'

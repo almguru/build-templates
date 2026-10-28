@@ -33,6 +33,8 @@ resources:
 
 A comprehensive template for building, testing, publishing, and packaging .NET projects with support for multi-framework scenarios, code signing, coverage reporting, and artifact staging.
 
+The template installs the .NET 10 SDK by default. Set `versionSpec` to use a different SDK version.
+
 ### Parameters
 
 | Parameter | Type | Default | Description |
@@ -168,7 +170,7 @@ For projects requiring VSTest runner instead of Microsoft Testing Platform:
     buildAction: 'publish'
     buildSpec: 'src/MyApp.sln'
     buildConfiguration: 'Release'
-    versionSpec: '9.x'
+    versionSpec: '10.x'
     feedsToUse: 'select'
     vstsFeed: 'innersource'
     testSpec: '**/bin/Release/**/*Tests.dll'
@@ -493,6 +495,8 @@ Template for building and pushing Docker images to container registries with sup
 
 Template for running acceptance tests in Azure DevOps pipelines with support for .NET test assemblies, Pester test scripts, Azure Key Vault integration, and custom test configuration.
 
+For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersion` is omitted. Set `runtimeVersion` to use a different SDK version.
+
 ### Parameters
 
 | Parameter | Type | Default | Description |
@@ -505,7 +509,7 @@ Template for running acceptance tests in Azure DevOps pipelines with support for
 | `afterTestsSteps` | stepList | `[]` | Custom steps to execute after running tests |
 | `suiteName` | string | `''` | Descriptive name for the test suite |
 | `runtimeType` | string | `'none'` | Runtime environment (`none`, `dotnet`, `pester`) |
-| `runtimeVersion` | string | `''` | .NET SDK version (default `9.x`), or Pester `latest` / exact stable version >= 5 (default `latest`) |
+| `runtimeVersion` | string | `''` | .NET uses `10.x` when omitted; Pester uses latest stable. Specify an override to pin either runtime. |
 | `artifactName` | string | `'deploy'` | Directory under `$(Pipeline.Workspace)` containing staged/downloaded tests |
 | `files` | string | `'**/*Tests.dll'` | Test-file glob; explicitly use `'**/*.Tests.ps1'` for Pester |
 | `arguments` | string | `''` | Additional runner arguments; quote values containing spaces. See Pester options below |
@@ -531,7 +535,6 @@ Template for running acceptance tests in Azure DevOps pipelines with support for
   parameters:
     environmentName: 'Development'
     runtimeType: 'dotnet'
-    runtimeVersion: '9.x'
     suiteName: 'API Tests'
     files: '**/*AcceptanceTests.dll'
 ```
@@ -768,7 +771,7 @@ stages:
       parameters:
         environmentName: 'Testing'
         runtimeType: 'dotnet'
-        runtimeVersion: '9.x'
+        runtimeVersion: '10.x'
         suiteName: 'Acceptance Tests'
         files: '**/*AcceptanceTests.dll'
 
