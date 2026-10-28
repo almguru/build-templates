@@ -194,13 +194,14 @@ A reusable template for executing Azure CLI commands in Azure DevOps pipelines w
 |-----------|------|---------|-------------|
 | `connectionType` | string | `'azureRM'` | Service connection type: `azureRM` (Azure Resource Manager) or `azureDevOps` (Azure DevOps) |
 | `serviceConnection` | string | `''` | Service connection name matching `connectionType` |
+| `azureSubscription` | string | `''` | Legacy Azure RM service connection parameter; used when `serviceConnection` is empty and `connectionType` is `azureRM` |
 | `defaultDisplayName` | string | `'Azure CLI script'` | Default display name for the task |
 | `defaultScriptType` | string | `'bash'` | Default script type (`bash`, `ps`, `pscore`, `batch`) |
 | `script` | object | `{}` | Script configuration object |
 
 The template uses [`AzureCLI@3`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/azure-cli-v3?view=azure-pipelines). `connectionType` defaults to `azureRM`; the template passes `serviceConnection` to the task's `azureSubscription` input for `azureRM`, or to `azureDevOpsServiceConnection` for `azureDevOps`. Ensure the named service connection matches the selected type. Azure DevOps connections use workload identity.
 
-When migrating from the previous template parameter, rename `azureSubscription` to `serviceConnection`. Existing callers that omit `connectionType` continue to use Azure Resource Manager by default.
+For Azure RM callers, `azureSubscription` remains supported for backward compatibility. When both `serviceConnection` and `azureSubscription` are set, `serviceConnection` takes precedence; `azureSubscription` is used only when `serviceConnection` is empty. Azure DevOps mode uses `serviceConnection`.
 
 ### Script Object Properties
 

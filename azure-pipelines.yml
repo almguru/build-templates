@@ -92,6 +92,7 @@ stages:
                 $requiredElements = @(
                     'AzureCLI@3',
                     'serviceConnection',
+                    'azureSubscription',
                     'connectionType',
                     "default: 'azureRM'",
                     'defaultDisplayName',
@@ -109,10 +110,11 @@ stages:
                 }
 
                 $serviceConnectionReference = '$' + '{{ parameters.serviceConnection }}'
+                $connectionFallbackReference = '$' + '{{ coalesce(parameters.serviceConnection, parameters.azureSubscription) }}'
                 foreach ($connectionInput in @(
                     "if eq(parameters.connectionType, 'azureRM')",
                     "if eq(parameters.connectionType, 'azureDevOps')",
-                    "azureSubscription: '$serviceConnectionReference'",
+                    "azureSubscription: '$connectionFallbackReference'",
                     "azureDevOpsServiceConnection: '$serviceConnectionReference'"
                 )) {
                     if (-not $content.Contains($connectionInput)) {
@@ -434,7 +436,8 @@ stages:
 
           - template: pipelines/lib/azure-cli.yml
             parameters:
-              serviceConnection: 'public-templates'
+              serviceConnection: 'preferred-public-templates'
+              azureSubscription: 'legacy-public-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'
