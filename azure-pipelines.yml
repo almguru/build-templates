@@ -437,7 +437,6 @@ stages:
           - template: pipelines/lib/azure-cli.yml
             parameters:
               serviceConnection: 'public-templates'
-              azureSubscription: 'legacy-public-connection-not-selected'
               script:
                 type: 'bash'
                 location: 'inlineScript'
