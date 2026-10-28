@@ -276,6 +276,8 @@ exit 23
         Assert-True ("$caught" -like '*Fixture*failure*') "Must surface $failure without fallback."
         $installation[$failure] = $false
     }
+    # Expected failing runner cases set this process-wide value; don't leak it to PowerShell@2.
+    $global:LASTEXITCODE = 0
     Write-Host "Passed $checks executor/adapter cases, report/context assertions, and version-selection cases (Pester $PesterVersion)."
 }
 finally {
