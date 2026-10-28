@@ -1,0 +1,72 @@
+# Copyright (c) 2026 Vladimir Gusarov. All rights reserved.
+# Licensed under the MIT License.
+#
+# Executes Az PowerShell scripts using AzurePowerShell@5 and an Azure Resource
+# Manager service connection. The task authenticates Az cmdlets, not Azure CLI.
+# Scripts do not need to call Connect-AzAccount.
+
+parameters:
+  # Azure Resource Manager service connection, e.g., 'MyAzureConnection'.
+  - name: serviceConnection
+    type: string
+    default: ''
+
+  - name: defaultDisplayName
+    type: string
+    default: 'Azure PowerShell script'
+
+  # 'latest' selects the latest installed Az version; use an exact version
+  # such as '14.4.0' to pin it. Required Az modules must be available on the agent.
+  - name: azurePowerShellVersion
+    type: string
+    default: 'latest'
+
+  # Use PowerShell Core on Windows as well as Linux.
+  - name: pwsh
+    type: boolean
+    default: true
+
+  # Script configuration, matching azure-cli.yml's common properties:
+  # - location: inlineScript (default) or scriptPath
+  # - script: Inline PowerShell content or a .ps1 path
+  # - arguments: PowerShell arguments for file scripts only, e.g., '-Name "my app"'
+  # - displayName: Optional task display name
+  # - workingDirectory: Optional directory, default $(System.DefaultWorkingDirectory).
+  #   File paths are prefixed with this directory when it is explicitly supplied.
+  # Script type is PowerShell; CLI-specific type/addSpnToEnvironment are not supported.
+  - name: script
+    type: object
+    default: {}
+
+  # Key-value environment variables available to the authenticated script.
+  - name: environment
+    type: object
+    default: {}
+
+steps:
+  - task: AzurePowerShell@5
+    displayName: ${{ coalesce(parameters.script.displayName, parameters.defaultDisplayName) }}
+    inputs:
+      azureSubscription: '${{ parameters.serviceConnection }}'
+      ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'scriptPath') }}:
+        ScriptType: 'FilePath'
+        ${{ if ne(coalesce(parameters.script.workingDirectory, ''), '') }}:
+          ScriptPath: ${{ parameters.script.workingDirectory }}/${{ parameters.script.script }}
+        ${{ else }}:
+          ScriptPath: ${{ parameters.script.script }}
+        ${{ if parameters.script.arguments }}:
+          ScriptArguments: ${{ parameters.script.arguments }}
+      ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'inlineScript') }}:
+        ScriptType: 'InlineScript'
+        Inline: ${{ parameters.script.script }}
+      ${{ if eq(parameters.azurePowerShellVersion, 'latest') }}:
+        azurePowerShellVersion: 'LatestVersion'
+      ${{ else }}:
+        azurePowerShellVersion: 'OtherVersion'
+        preferredAzurePowerShellVersion: ${{ parameters.azurePowerShellVersion }}
+      pwsh: ${{ parameters.pwsh }}
+      errorActionPreference: 'stop'
+      workingDirectory: ${{ coalesce(parameters.script.workingDirectory, '$(System.DefaultWorkingDirectory)') }}
+    ${{ if parameters.environment }}:
+      env:
+        ${{ insert }}: ${{ parameters.environment }}

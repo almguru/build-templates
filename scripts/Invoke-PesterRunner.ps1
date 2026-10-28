@@ -3,7 +3,7 @@
     Runs one Pester test file within the calling PowerShell process.
 .DESCRIPTION
     Adapts the shared test executor's positional arguments to Pester configuration.
-    Keeps the caller's Azure CLI authentication environment and writes a unique
+    Keeps the caller's Az PowerShell session or Azure CLI environment and writes a unique
     NUnit report before returning an exit code to the executor. Exit code 11
     indicates a filtered-out file; configure the executor's NoTestsExitCode to 11.
 .PARAMETER TestFile
