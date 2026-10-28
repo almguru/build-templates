@@ -621,7 +621,9 @@ The template controls paths, report configuration, and host lifetime, so Pester
 `ALMGURU_TEST_RUNNER_ARGUMENTS` is reserved for internal argument transport.
 
 Each selected file runs separately through `Invoke-TestRunner.ps1`, with a
-distinct path-derived `*.pester.xml` NUnit report in `$(Agent.TempDirectory)`.
+distinct path-derived `*.pester.xml` NUnit report in a fresh per-invocation
+subdirectory of `$(Agent.TempDirectory)`. Both execution and publication use
+`$(runtimeResultsDirectory)`, so later suites do not republish earlier reports.
 Shared cross-file fixtures are not supported. Files excluded by filters do not
 fail a suite that executes other tests; an entirely filtered-out suite fails.
 Empty suites, discovery errors, and failing tests also fail execution. Reports

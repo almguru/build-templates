@@ -106,7 +106,9 @@ Describe 'Runtime context' {
     $null = Invoke-Case '**/*.Tests.ps1' '-FullNameFilter "Runtime context.missing name"' -ExpectedExit 11
     $null = Invoke-Case '**/*.Tests.ps1' '-TagFilter Missing' -ExpectedExit 11
     $null = Invoke-Case 'Root.Tests.ps1' '-ExcludePath "**/Root.Tests.ps1"' -ExpectedExit 11
+    $null = Invoke-Case 'Root.Tests.ps1' '-ExcludePath "**\Root.Tests.ps1"' -ExpectedExit 11
     $null = Invoke-Case '**/*.Tests.ps1' '-ExcludePath "**/nested directory/*" -Output Minimal'
+    $null = Invoke-Case '**/*.Tests.ps1' '-ExcludePath "**\nested directory\*" -Output Minimal'
     $null = Invoke-Case 'Root.Tests.ps1' '-Configuration arbitrary' -ExpectedError 'Unsupported Pester option'
     $null = Invoke-Case 'Root.Tests.ps1' '-TagFilter' -ExpectedError 'requires a value'
     $null = Invoke-Case 'Root.Tests.ps1' '-TagFilter Smoke -TagFilter -Output Minimal' -ExpectedError 'requires a value'
@@ -169,6 +171,10 @@ exit 0
     $captured = Get-Content -LiteralPath $env:RUNNER_CAPTURE -Raw | ConvertFrom-Json
     Assert-True (($captured.Values -join '|') -eq "--report-trx|--results-directory|$results|--filter|Category=Smoke Test|--literal|`$(not-executed)") 'Runner arguments must be literal and preserve order/quoting.'
     $null = Invoke-Case '**\*.Tests.dll' -Command $capture -ReportArguments '--report-trx --results-directory'
+    $null = Invoke-Case '**/*[Tt]ests.dll' -Command $capture -ReportArguments '--report-trx --results-directory'
+    $null = Invoke-Case 'bin/[A-Z]ample.Tests.dll' -Command $capture -ReportArguments '--report-trx --results-directory'
+    $null = Invoke-Case 'bin/[Ss]ample.[Tt]ests.dll' -Command $capture -ReportArguments '--report-trx --results-directory'
+    $null = Invoke-Case '**/*[Xx]ests.dll' -ExpectedExit 10 -Command $capture -ReportArguments '--report-trx --results-directory'
 
     $nativeInput = Write-Fixture 'input/native/Native.Tests.ps1' @'
 param([Parameter(ValueFromRemainingArguments)] [string[]]$Values)

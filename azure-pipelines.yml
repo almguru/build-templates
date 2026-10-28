@@ -419,7 +419,7 @@ stages:
                 PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
               afterTestsSteps:
                 - pwsh: |
-                    $reports = @(Get-ChildItem -LiteralPath "$(Agent.TempDirectory)" -Filter '*.pester.xml')
+                    $reports = @(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)" -Filter '*.pester.xml')
                     if ($reports.Count -ne 2) { throw "Expected two separate reports; got $($reports.Count)." }
                     foreach ($report in $reports) {
                         [xml]$xml = Get-Content -LiteralPath $report.FullName -Raw
@@ -428,7 +428,38 @@ stages:
                             throw 'Expected two passing Smoke tests in each report.'
                         }
                     }
+                    Write-Host "##vso[task.setvariable variable=previousPesterResultsDirectory]$(runtimeResultsDirectory)"
                   displayName: 'Verify isolated NUnit reports and filtering'
+
+          - template: pipelines/lib/run-acceptance-tests.yml
+            parameters:
+              environmentName: 'TemplateTests'
+              runtimeType: 'pester'
+              runtimeVersion: '$(pesterRequestedVersion)'
+              artifactName: 'pester-tests'
+              files: 'Context.Tests.ps1'
+              suiteName: 'Second isolated Pester suite'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              beforeTestsSteps:
+                - pwsh: |
+                    if ("$(runtimeResultsDirectory)" -eq "$(previousPesterResultsDirectory)") {
+                        throw 'Sequential template calls must have separate result directories.'
+                    }
+                    if (@(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)").Count -ne 0) {
+                        throw 'The second suite must start with an empty result directory.'
+                    }
+                  displayName: 'Verify fresh results directory for second suite'
+              afterTestsSteps:
+                - pwsh: |
+                    $current = @(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)" -Filter '*.pester.xml')
+                    $previous = @(Get-ChildItem -LiteralPath "$(previousPesterResultsDirectory)" -Filter '*.pester.xml')
+                    if ($current.Count -ne 1 -or $previous.Count -ne 2) {
+                        throw 'Sequential suite reports were mixed or overwritten.'
+                    }
+                  displayName: 'Verify sequential suite report isolation'
 
           - pwsh: |
               & "$(almguruTemplateFilesPath)/scripts/tests/Invoke-PesterRuntimeTests.ps1" -PesterVersion "$(runtimePesterVersion)"

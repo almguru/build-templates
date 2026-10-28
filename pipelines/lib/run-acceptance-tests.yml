@@ -181,6 +181,12 @@ parameters:
             displayName: 'Install Pester'
 
 steps:
+  - pwsh: |
+      $resultsDirectory = Join-Path $env:AGENT_TEMPDIRECTORY "acceptance-tests-$([guid]::NewGuid())"
+      $null = New-Item -ItemType Directory -Path $resultsDirectory
+      Write-Host "##vso[task.setvariable variable=runtimeResultsDirectory]$resultsDirectory"
+    displayName: 'Create acceptance test results directory'
+
   - ${{ each tool in parameters.toolsConfiguration }}:
       - ${{ if eq(tool.name, parameters.runtimeType) }}:
           - pwsh: |
@@ -236,7 +242,7 @@ steps:
                 arguments: >-
                   -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
                   -FilePattern "${{ parameters.files }}"
-                  -ResultsDirectory "$(Agent.TempDirectory)"
+                  -ResultsDirectory "$(runtimeResultsDirectory)"
                   -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
                   -TestRunnerCommand "$(runtimeRunCmd)"
                   -TestResultsArguments "$(runtimeResultsArguments)"
@@ -256,7 +262,7 @@ steps:
               arguments: >-
                 -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
                 -FilePattern "${{ parameters.files }}"
-                -ResultsDirectory "$(Agent.TempDirectory)"
+                -ResultsDirectory "$(runtimeResultsDirectory)"
                 -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
                 -TestRunnerCommand "$(runtimeRunCmd)"
                 -TestResultsArguments "$(runtimeResultsArguments)"
@@ -271,7 +277,7 @@ steps:
     condition: succeededOrFailed()
     inputs:
       testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
-      searchFolder: '$(Agent.TempDirectory)'
+      searchFolder: '$(runtimeResultsDirectory)'
       testResultsFormat: '$(runtimeResultsFormatName)'
       testResultsFiles: '$(runtimeResultsFilePattern)'
       mergeTestResults: true

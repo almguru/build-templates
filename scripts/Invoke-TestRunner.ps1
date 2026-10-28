@@ -163,16 +163,28 @@ function Find-TestFiles {
 
     $SearchPath = (Resolve-Path -LiteralPath $SearchPath).Path
     $FilePattern = $FilePattern.Replace('\', '/')
-    $hasWildcard = $FilePattern -match '[*?]'
+    $hasWildcard = $FilePattern -match '[*?\[]'
     if ($hasWildcard) {
         Write-Verbose "Searching for files matching pattern: $FilePattern in $SearchPath"
 
         # A globstar includes zero directories, unlike a required slash after '*'.
-        $pattern = [regex]::Escape($FilePattern).
-            Replace('\*\*/', '(?:.*/)?').
-            Replace('\*\*', '.*').
-            Replace('\*', '[^/]*').
-            Replace('\?', '[^/]')
+        $pattern = [regex]::Replace($FilePattern, '\[[^\]]+\]|\*\*/|\*\*|\*|\?|.', {
+            param($token)
+            switch ($token.Value) {
+                '**/' { '(?:.*/)?' }
+                '**' { '.*' }
+                '*' { '[^/]*' }
+                '?' { '[^/]' }
+                default {
+                    if ($token.Value.StartsWith('[') -and $token.Value.EndsWith(']')) {
+                        '[' + [regex]::Escape($token.Value.Substring(1, $token.Value.Length - 2)) + ']'
+                    }
+                    else {
+                        [regex]::Escape($token.Value)
+                    }
+                }
+            }
+        })
         $files = Get-ChildItem -LiteralPath $SearchPath -Recurse -File | Where-Object {
             $relativePath = [System.IO.Path]::GetRelativePath($SearchPath, $_.FullName).Replace('\', '/')
             $matchPath = if ($FilePattern.Contains('/')) { $relativePath } else { $_.Name }

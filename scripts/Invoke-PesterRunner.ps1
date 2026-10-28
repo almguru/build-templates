@@ -94,7 +94,7 @@ Import-Module Pester -RequiredVersion $RequiredVersion -Force -ErrorAction Stop
 $configuration = New-PesterConfiguration
 $configuration.Run.Path = @((Resolve-Path -LiteralPath $TestFile).Path)
 foreach ($excludePath in $options.ExcludePath) {
-    if ($configuration.Run.Path.Value[0] -like $excludePath) {
+    if ($configuration.Run.Path.Value[0].Replace('\', '/') -like $excludePath.Replace('\', '/')) {
         Write-Host "Pester file excluded by -ExcludePath: $TestFile"
         exit 11
     }
@@ -102,7 +102,7 @@ foreach ($excludePath in $options.ExcludePath) {
 $configuration.Run.PassThru = $true
 $configuration.Run.Exit = $false
 $configuration.Run.Throw = $false
-$configuration.Run.ExcludePath = $options.ExcludePath
+$configuration.Run.ExcludePath = @($options.ExcludePath | ForEach-Object { $_.Replace('\', '/') })
 $configuration.Filter.Tag = $options.TagFilter
 $configuration.Filter.ExcludeTag = $options.ExcludeTagFilter
 $configuration.Filter.FullName = $options.FullNameFilter
