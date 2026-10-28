@@ -33,7 +33,7 @@ resources:
 
 A comprehensive template for building, testing, publishing, and packaging .NET projects with support for multi-framework scenarios, code signing, coverage reporting, and artifact staging.
 
-The template installs the .NET 11 SDK by default. Set `versionSpec` to use a different SDK version.
+The template installs the .NET 11 SDK by default, including preview releases while .NET 11 is prerelease. Set `versionSpec` to use a different SDK version.
 
 ### Parameters
 
@@ -62,7 +62,7 @@ The template installs the .NET 11 SDK by default. Set `versionSpec` to use a dif
 | `codeSigningServiceConnection` | string | `''` | Azure service connection for Key Vault access |
 | `codeSigningKeyVaultName` | string | `''` | Azure Key Vault name containing signing certificate |
 | `codeSigningCertificateSecretName` | string | `''` | Key Vault secret name containing the base64-encoded certificate |
-| `versionSpec` | string | `'11.x'` | .NET SDK version to install |
+| `versionSpec` | string | `'11.x'` | .NET SDK version to install (preview releases are included for .NET 11) |
 | `nuGetVersionSpec` | string | `'7.x'` | NuGet tool version to install |
 | `beforeBuildSteps` | stepList | `[]` | Custom steps to execute before build |
 
