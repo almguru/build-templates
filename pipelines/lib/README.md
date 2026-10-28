@@ -33,7 +33,7 @@ resources:
 
 A comprehensive template for building, testing, publishing, and packaging .NET projects with support for multi-framework scenarios, code signing, coverage reporting, and artifact staging.
 
-The template installs the .NET 11 SDK by default, including preview releases while .NET 11 is prerelease. Set `versionSpec` to use a different SDK version.
+The template installs the .NET 10 SDK by default. Set `versionSpec` to use a different SDK version.
 
 ### Parameters
 
@@ -62,7 +62,7 @@ The template installs the .NET 11 SDK by default, including preview releases whi
 | `codeSigningServiceConnection` | string | `''` | Azure service connection for Key Vault access |
 | `codeSigningKeyVaultName` | string | `''` | Azure Key Vault name containing signing certificate |
 | `codeSigningCertificateSecretName` | string | `''` | Key Vault secret name containing the base64-encoded certificate |
-| `versionSpec` | string | `'11.x'` | .NET SDK version to install (preview releases are included for .NET 11) |
+| `versionSpec` | string | `'10.x'` | .NET SDK version to install |
 | `nuGetVersionSpec` | string | `'7.x'` | NuGet tool version to install |
 | `beforeBuildSteps` | stepList | `[]` | Custom steps to execute before build |
 
@@ -170,7 +170,7 @@ For projects requiring VSTest runner instead of Microsoft Testing Platform:
     buildAction: 'publish'
     buildSpec: 'src/MyApp.sln'
     buildConfiguration: 'Release'
-    versionSpec: '11.x'
+    versionSpec: '10.x'
     feedsToUse: 'select'
     vstsFeed: 'innersource'
     testSpec: '**/bin/Release/**/*Tests.dll'
@@ -495,7 +495,7 @@ Template for building and pushing Docker images to container registries with sup
 
 Template for running acceptance tests in Azure DevOps pipelines with support for .NET test assemblies, Azure Key Vault integration, and custom test configuration.
 
-For .NET acceptance tests, the template uses the .NET 11 SDK when `runtimeVersion` is omitted. Set `runtimeVersion` to use a different SDK version.
+For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersion` is omitted. Set `runtimeVersion` to use a different SDK version.
 
 ### Parameters
 
@@ -509,7 +509,7 @@ For .NET acceptance tests, the template uses the .NET 11 SDK when `runtimeVersio
 | `afterTestsSteps` | stepList | `[]` | Custom steps to execute after running tests |
 | `suiteName` | string | `''` | Descriptive name for the test suite |
 | `runtimeType` | string | `'none'` | Runtime environment (`none`, `dotnet`) |
-| `runtimeVersion` | string | `'11.x'` | .NET version to use (e.g., '10.x', '11.x') |
+| `runtimeVersion` | string | `'10.x'` | .NET version to use (e.g., '8.x', '9.x', '10.x') |
 | `artifactName` | string | `'deploy'` | Pipeline artifact containing test assemblies |
 | `files` | string | `'**/*Tests.dll'` | Glob pattern to locate test assemblies |
 | `arguments` | string | `''` | Additional arguments for test runner |
@@ -667,7 +667,7 @@ stages:
       parameters:
         environmentName: 'Testing'
         runtimeType: 'dotnet'
-        runtimeVersion: '11.x'
+        runtimeVersion: '10.x'
         suiteName: 'Acceptance Tests'
         files: '**/*AcceptanceTests.dll'
 

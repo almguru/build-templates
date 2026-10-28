@@ -117,10 +117,10 @@ parameters:
     type: string
     default: 'packages'
 
-  # .NET SDK version to install; preview versions are included for .NET 11
+  # .NET SDK version to install
   - name: versionSpec
     type: string
-    default: '11.x'
+    default: '10.x'
 
   # NuGet tool version to install
   - name: nuGetVersionSpec
@@ -202,7 +202,6 @@ steps:
     displayName: 'Install .Net ${{ parameters.versionSpec }}'
     inputs:
       version: '${{ parameters.versionSpec }}'
-      includePreviewVersions: ${{ startsWith(parameters.versionSpec, '11.') }}
 
   - ${{ if ne(parameters.feedsToUse, 'none') }}:
       - task: DotNetCoreCLI@2
