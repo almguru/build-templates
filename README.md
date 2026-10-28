@@ -102,7 +102,7 @@ This repository includes an automated Azure Pipeline (`azure-pipelines.yml`) tha
 
 The pipeline actively tests these templates with real execution:
 
-- **azure-cli.yml** - Tested with bash, PowerShell Core, and environment variables
+- **azure-cli.yml** - Tested with bash, PowerShell Core, and environment variables; compile-validated with Azure RM and structurally validated for Azure DevOps connection routing
 - **use-template-files.yml** - Tested with repository checkout operations
 - **docker.yml** - Tested with parameter validation scenarios
 - **PowerShell scripts** - Tested with various input conditions
