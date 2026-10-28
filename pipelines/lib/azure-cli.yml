@@ -9,7 +9,7 @@
 # Parameters:
 # - connectionType: The service connection type to use (azureRM or azureDevOps)
 # - serviceConnection: The service connection matching connectionType
-# - azureSubscription: Legacy Azure RM service connection parameter
+# - azureSubscription: Obsolete legacy Azure RM parameter; may be removed in future versions
 # - defaultDisplayName: Default display name for the task
 # - defaultScriptType: Default script type (bash, ps, pscore, batch)
 # - script: Object containing script configuration (type, location, script content, arguments, displayName)
@@ -28,7 +28,7 @@ parameters:
     type: string
     default: ''
 
-  # Legacy Azure RM parameter; serviceConnection takes precedence when provided
+  # Obsolete legacy Azure RM parameter; serviceConnection takes precedence and this may be removed in future versions
   - name: azureSubscription
     type: string
     default: ''
