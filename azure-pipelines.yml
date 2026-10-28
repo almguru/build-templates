@@ -436,8 +436,8 @@ stages:
 
           - template: pipelines/lib/azure-cli.yml
             parameters:
-              serviceConnection: 'preferred-public-templates'
-              azureSubscription: 'legacy-public-templates'
+              serviceConnection: 'public-templates'
+              azureSubscription: 'legacy-public-connection-not-selected'
               script:
                 type: 'bash'
                 location: 'inlineScript'
@@ -454,7 +454,7 @@ stages:
           - template: pipelines/lib/azure-cli.yml
             parameters:
               connectionType: 'azureDevOps'
-              serviceConnection: 'public-devops-templates'
+              serviceConnection: 'public-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'
