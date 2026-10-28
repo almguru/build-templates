@@ -7,14 +7,29 @@
 # (PowerShell, PowerShell Core, Bash, or Batch) and supports both inline scripts and script files.
 #
 # Parameters:
-# - azureSubscription: The Azure service connection to use
+# - connectionType: The service connection type to use (azureRM or azureDevOps)
+# - azureSubscription: The Azure Resource Manager service connection to use
+# - azureDevOpsServiceConnection: The Azure DevOps service connection to use
 # - defaultDisplayName: Default display name for the task
 # - defaultScriptType: Default script type (bash, ps, pscore, batch)
 # - script: Object containing script configuration (type, location, script content, arguments, displayName)
 
 parameters:
+  # Service connection type to use (azureRM or azureDevOps)
+  - name: connectionType
+    type: string
+    default: 'azureRM'
+    values:
+      - 'azureRM'
+      - 'azureDevOps'
+
   # Name of the Azure RM service connection to use for the deployment
   - name: azureSubscription
+    type: string
+    default: ''
+
+  # Name of the Azure DevOps service connection to use
+  - name: azureDevOpsServiceConnection
     type: string
     default: ''
 
@@ -56,9 +71,13 @@ parameters:
     default: {}
 
 steps:
-  - task: AzureCLI@2
+  - task: AzureCLI@3
     inputs:
-      azureSubscription: '${{ parameters.azureSubscription }}'
+      connectionType: '${{ parameters.connectionType }}'
+      ${{ if eq(parameters.connectionType, 'azureRM') }}:
+        azureSubscription: '${{ parameters.azureSubscription }}'
+      ${{ if eq(parameters.connectionType, 'azureDevOps') }}:
+        azureDevOpsServiceConnection: '${{ parameters.azureDevOpsServiceConnection }}'
       scriptType: ${{ coalesce(parameters.script.type, parameters.defaultScriptType) }}
       scriptLocation: ${{ coalesce(parameters.script.location, 'inlineScript') }}
       ${{ if eq(coalesce(parameters.script.location, 'inlineScript'), 'scriptPath') }}:

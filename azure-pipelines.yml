@@ -90,12 +90,15 @@ stages:
                 
                 # Verify required parameters exist in template
                 $requiredElements = @(
+                    'AzureCLI@3',
                     'azureSubscription',
+                    'azureDevOpsServiceConnection',
+                    'connectionType',
+                    "default: 'azureRM'",
                     'defaultDisplayName',
                     'defaultScriptType',
                     'script',
-                    'environment',
-                    'AzureCLI@2'
+                    'environment'
                 )
                 
                 foreach ($element in $requiredElements) {
@@ -104,6 +107,17 @@ stages:
                         exit 1
                     }
                     Write-Host "✓ Found required element: $element"
+                }
+
+                foreach ($connectionInput in @(
+                    "if eq(parameters.connectionType, 'azureRM')",
+                    "if eq(parameters.connectionType, 'azureDevOps')"
+                )) {
+                    if (-not $content.Contains($connectionInput)) {
+                        Write-Host "##vso[task.logissue type=error]Missing conditional connection input: $connectionInput"
+                        exit 1
+                    }
+                    Write-Host "✓ Found conditional connection input: $connectionInput"
                 }
                 
                 # Verify script type values
@@ -419,6 +433,15 @@ stages:
           - template: pipelines/lib/azure-cli.yml
             parameters:
               azureSubscription: 'public-templates'
+              script:
+                type: 'bash'
+                location: 'inlineScript'
+                script: 'echo "compile-time validation"'
+
+          - template: pipelines/lib/azure-cli.yml
+            parameters:
+              connectionType: 'azureDevOps'
+              azureDevOpsServiceConnection: 'public-devops-templates'
               script:
                 type: 'bash'
                 location: 'inlineScript'
