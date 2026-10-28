@@ -33,6 +33,8 @@ resources:
 
 A comprehensive template for building, testing, publishing, and packaging .NET projects with support for multi-framework scenarios, code signing, coverage reporting, and artifact staging.
 
+The template installs the .NET 11 SDK by default. Set `versionSpec` to use a different SDK version.
+
 ### Parameters
 
 | Parameter | Type | Default | Description |
@@ -493,6 +495,8 @@ Template for building and pushing Docker images to container registries with sup
 
 Template for running acceptance tests in Azure DevOps pipelines with support for .NET test assemblies, Azure Key Vault integration, and custom test configuration.
 
+For .NET acceptance tests, the template uses the .NET 11 SDK when `runtimeVersion` is omitted. Set `runtimeVersion` to use a different SDK version.
+
 ### Parameters
 
 | Parameter | Type | Default | Description |
@@ -531,7 +535,6 @@ Template for running acceptance tests in Azure DevOps pipelines with support for
   parameters:
     environmentName: 'Development'
     runtimeType: 'dotnet'
-    runtimeVersion: '11.x'
     suiteName: 'API Tests'
     files: '**/*AcceptanceTests.dll'
 ```
