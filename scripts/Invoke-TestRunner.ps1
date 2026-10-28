@@ -24,7 +24,8 @@
 
 .PARAMETER AdditionalArguments
     Optional additional arguments to pass to the test runner. These arguments will be appended
-    to the test runner command for each test assembly.
+    to the test runner command for each test file. Single or double quotes group values
+    containing spaces. Arguments are parsed as literal strings, never evaluated.
 
 .PARAMETER TestRunnerCommand
     The command or executable name of the test runner to use. Supported test runners include:
@@ -39,6 +40,11 @@
     - Microsoft Test Platform: '--logger:trx --ResultsDirectory:'
     - xUnit v3: '--reporter trx --output'
     - dotnet test: 'test --logger trx --results-directory'
+
+.PARAMETER NoTestsExitCode
+    Optional runner exit code indicating a file was filtered out. Such files do not
+    fail a suite containing executed tests; a suite where every file is filtered
+    out still fails. Defaults to -1 (disabled).
 
 .EXAMPLE
     .\Invoke-TestRunner.ps1 -SearchPath "C:\build\output" -FilePattern "**/*Tests.dll" -ResultsDirectory "C:\TestResults" -TestRunnerCommand "vstest.console.exe" -TestResultsArguments "--logger:trx --ResultsDirectory:"
@@ -95,15 +101,58 @@ param(
     
     [Parameter(Mandatory = $true, HelpMessage = "Test results format and output arguments for the test runner")]
     [ValidateNotNullOrEmpty()]
-    [string]$TestResultsArguments
+    [string]$TestResultsArguments,
+
+    [ValidateScript({ $_ -eq -1 -or $_ -gt 0 })]
+    [int]$NoTestsExitCode = -1
 )
 
-# Construct test arguments
+$ErrorActionPreference = 'Stop'
+
+function ConvertTo-RunnerArguments {
+    param([string]$ArgumentString)
+
+    $value = [System.Text.StringBuilder]::new()
+    $quote = $null
+    $started = $false
+    foreach ($character in $ArgumentString.ToCharArray()) {
+        if ($null -ne $quote) {
+            if ($character -eq $quote) {
+                $quote = $null
+            }
+            else {
+                $null = $value.Append($character)
+            }
+        }
+        elseif ($character -eq '"' -or $character -eq "'") {
+            $quote = $character
+            $started = $true
+        }
+        elseif ([char]::IsWhiteSpace($character)) {
+            if ($started) {
+                $value.ToString()
+                $null = $value.Clear()
+                $started = $false
+            }
+        }
+        else {
+            $null = $value.Append($character)
+            $started = $true
+        }
+    }
+    if ($null -ne $quote) {
+        throw 'Unterminated quote in test runner arguments.'
+    }
+    if ($started) {
+        $value.ToString()
+    }
+}
+
 $testArguments = @()
-$testArguments += $TestResultsArguments.Trim() -split '\s+' | Where-Object { $_ -ne '' }
+$testArguments += @(ConvertTo-RunnerArguments $TestResultsArguments)
 $testArguments += $ResultsDirectory
 if (![string]::IsNullOrWhiteSpace($AdditionalArguments)) {
-    $testArguments += $AdditionalArguments.Trim() -split '\s+' | Where-Object { $_ -ne '' }
+    $testArguments += @(ConvertTo-RunnerArguments $AdditionalArguments)
 }
 
 function Find-TestFiles {
@@ -112,32 +161,22 @@ function Find-TestFiles {
         [string]$FilePattern
     )
 
+    $SearchPath = (Resolve-Path -LiteralPath $SearchPath).Path
+    $FilePattern = $FilePattern.Replace('\', '/')
     $hasWildcard = $FilePattern -match '[*?]'
     if ($hasWildcard) {
-        # Convert '/' to '\' for Windows path matching
-        $patternWin = $FilePattern -replace '/', '\'
-        
-        # Replace '**/' or '**\' with wildcard matching any directory depth
-        # We'll use -like with a pattern that matches the relative path from SearchPath
-        $searchPattern = $patternWin -replace '\*\*[/\\]', '*\'
-        
         Write-Verbose "Searching for files matching pattern: $FilePattern in $SearchPath"
-        
-        # Get all files recursively and filter by matching the relative path
-        $files = Get-ChildItem -Path $SearchPath -Recurse -File | Where-Object {
-            # Get the relative path from SearchPath
-            $relativePath = $_.FullName.Substring($SearchPath.TrimEnd('\', '/').Length).TrimStart('\', '/')
-            
-            # On macOS/Linux, keep the path with forward slashes for matching
-            if ($PSVersionTable.Platform -eq 'Unix' -or $PSVersionTable.OS -match 'Darwin') {
-                $relativePath = $relativePath -replace '\\', '/'
-                $matchPattern = $FilePattern -replace '\*\*/', '*/'
-            }
-            else {
-                $matchPattern = $searchPattern
-            }
-            
-            $relativePath -like $matchPattern
+
+        # A globstar includes zero directories, unlike a required slash after '*'.
+        $pattern = [regex]::Escape($FilePattern).
+            Replace('\*\*/', '(?:.*/)?').
+            Replace('\*\*', '.*').
+            Replace('\*', '[^/]*').
+            Replace('\?', '[^/]')
+        $files = Get-ChildItem -LiteralPath $SearchPath -Recurse -File | Where-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($SearchPath, $_.FullName).Replace('\', '/')
+            $matchPath = if ($FilePattern.Contains('/')) { $relativePath } else { $_.Name }
+            $matchPath -match "^$pattern$"
         }
         
         return $files
@@ -145,9 +184,9 @@ function Find-TestFiles {
     else {
         # No wildcards - treat as direct path or file name
         $directFile = Join-Path -Path $SearchPath -ChildPath $FilePattern
-        if (Test-Path $directFile) {
+        if (Test-Path -LiteralPath $directFile -PathType Leaf) {
             Write-Verbose "Found file by direct path: $directFile"
-            return @(Get-Item $directFile)
+            return @(Get-Item -LiteralPath $directFile)
         }
         else {
             Write-Verbose "Attempting fallback search for file name '$FilePattern' in $SearchPath"
@@ -156,11 +195,11 @@ function Find-TestFiles {
     }
 }
 
-$files = Find-TestFiles -SearchPath $SearchPath -FilePattern $FilePattern
+$files = @(Find-TestFiles -SearchPath $SearchPath -FilePattern $FilePattern)
 
 if ($files.Count -eq 0) {
     Write-Warning "No files found matching pattern: $FilePattern"
-    Write-Host "##vso[task.logissue type=error]No test assemblies were found to execute."
+    Write-Host "##vso[task.logissue type=error]No test files were found to execute."
     exit 10
 }
 
@@ -173,13 +212,23 @@ foreach ($file in $files) {
     Write-Host "##[command]$($testRunCmd -join ' ')"
     
     if ($PSCmdlet.ShouldProcess($file.FullName, "Execute test runner $TestRunnerCommand")) {
-        & $testRunCmd[0] $testRunCmd[1..($testRunCmd.Length - 1)]
+        $global:LASTEXITCODE = 0
+        $runnerArguments = $testRunCmd[1..($testRunCmd.Length - 1)]
+        & $testRunCmd[0] @runnerArguments
         $allExitCodes += $LASTEXITCODE
     }
 }
 
-$overallExitCode = ($allExitCodes | Where-Object { $_ -ne 0 }) | Select-Object -First 1
+$overallExitCode = ($allExitCodes | Where-Object {
+    $_ -ne 0 -and ($NoTestsExitCode -eq -1 -or $_ -ne $NoTestsExitCode)
+}) | Select-Object -First 1
 if ($null -ne $overallExitCode) {
-    Write-Host "##vso[task.logissue type=warning]One or more test assemblies failed"
+    Write-Host "##vso[task.logissue type=warning]One or more test files failed"
     exit $overallExitCode
 }
+if ($NoTestsExitCode -ne -1 -and $allExitCodes.Count -gt 0 -and
+    @($allExitCodes | Where-Object { $_ -ne $NoTestsExitCode }).Count -eq 0) {
+    Write-Host "##vso[task.logissue type=error]No tests were executed; every test file was filtered out."
+    exit $NoTestsExitCode
+}
+exit 0

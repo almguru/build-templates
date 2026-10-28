@@ -4,15 +4,15 @@
 # Run Acceptance Tests Template
 #
 # This template provides a reusable way to run acceptance tests in Azure DevOps pipelines.
-# It supports .NET test assemblies using Microsoft Testing Platform and can integrate with
+# It supports .NET assemblies using Microsoft Testing Platform and Pester scripts, and integrates with
 # Azure Key Vault for secrets management.
 #
 # Features:
-# - Supports .NET test assemblies with configurable runtime versions
+# - Supports .NET test assemblies and in-process Pester tests with configurable versions
 # - Azure Key Vault integration for secrets and configuration
 # - Customizable test file patterns and arguments
 # - Before/after test step hooks for custom setup/teardown
-# - Automatic test result publishing in .trx format
+# - Automatic test result publishing in TRX (.NET) or NUnit XML (Pester) format
 # - Environment variable support for test configuration
 #
 # Usage Examples:
@@ -25,6 +25,14 @@
 #     runtimeVersion: '9.x'
 #     suiteName: 'API Tests'
 #     files: '**/*AcceptanceTests.dll'
+#
+# Pester tests with the latest stable version (set runtimeVersion to pin a version):
+# - template: pipelines/lib/run-acceptance-tests.yml
+#   parameters:
+#     environmentName: 'Development'
+#     runtimeType: 'pester'
+#     files: '**/*.Tests.ps1'
+#     arguments: '-TagFilter Smoke -Output Detailed'
 #
 # With Azure Key Vault integration:
 # - template: pipelines/lib/run-acceptance-tests.yml
@@ -102,8 +110,10 @@ parameters:
     values:
       - 'none'
       - 'dotnet'
+      - 'pester'
 
-  # .NET version to use for running tests (e.g., '8.x', '9.x')
+  # .NET SDK version (e.g., '9.x'), or Pester 'latest' / exact stable version >= 5.
+  # Empty uses the runtime default; Pester latest follows stable releases across majors.
   - name: runtimeVersion
     type: string
     default: ''
@@ -113,12 +123,14 @@ parameters:
     type: string
     default: 'deploy'
 
-  # Glob pattern to locate test assemblies (e.g., '**/*AcceptanceTests.dll')
+  # Glob pattern for tests: '**/*AcceptanceTests.dll' (.NET), '**/*.Tests.ps1' (Pester).
   - name: files
     type: string
     default: '**/*Tests.dll'
 
-  # Additional arguments to pass to the test runner (e.g., '--filter Category=Smoke')
+  # Runner arguments, e.g., '--filter Category=Smoke' or '-TagFilter Smoke -Output Detailed'.
+  # Quote values containing spaces. Pester supports TagFilter, ExcludeTagFilter,
+  # FullNameFilter, ExcludePath, and Output; paths/reports/process lifetime are managed here.
   - name: arguments
     type: string
     default: ''
@@ -137,6 +149,7 @@ parameters:
         resultsFormatName: ''
         resultsFilePattern: ''
         resultsArguments: ''
+        noTestsExitCode: -1
         installSteps: []
 
       - name: 'dotnet'
@@ -145,6 +158,7 @@ parameters:
         resultsFormatName: 'VSTest'
         resultsFilePattern: '**/*.trx'
         resultsArguments: '--report-trx --results-directory'
+        noTestsExitCode: -1
         installSteps:
           # Install .NET SDK using the UseDotNet task. Because tool-specific variables are set after template evaluation,
           # it's not possible to use `runtimeXXX` variables in task's display name, but they can be used in parameters.
@@ -152,6 +166,19 @@ parameters:
             displayName: 'Install .Net'
             inputs:
               version: '$(runtimeVersion)'
+
+      - name: 'pester'
+        runCmd: '$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1'
+        version: 'latest'
+        resultsFormatName: 'NUnit'
+        resultsFilePattern: '**/*.pester.xml'
+        # Setup appends the resolved version after installation, before execution.
+        resultsArguments: 'NUnitXml'
+        noTestsExitCode: 11
+        installSteps:
+          - pwsh: |
+              & "$(almguruTemplateFilesPath)/scripts/Install-PesterRuntime.ps1" -Version "$(runtimeVersion)"
+            displayName: 'Install Pester'
 
 steps:
   - ${{ each tool in parameters.toolsConfiguration }}:
@@ -161,11 +188,11 @@ steps:
               Write-Host "##vso[task.setvariable variable=runtimeVersion]${{ coalesce(parameters.runtimeVersion, tool.version) }}"
               Write-Host "##vso[task.setvariable variable=artifactName]${{ parameters.artifactName }}"
               Write-Host "##vso[task.setvariable variable=files]${{ parameters.files }}"
-              Write-Host "##vso[task.setvariable variable=arguments]${{ parameters.arguments }}"
               Write-Host "##vso[task.setvariable variable=runtimeRunCmd]${{ tool.runCmd }}"
               Write-Host "##vso[task.setvariable variable=runtimeResultsFormatName]${{ tool.resultsFormatName }}"
               Write-Host "##vso[task.setvariable variable=runtimeResultsFilePattern]${{ tool.resultsFilePattern }}"
               Write-Host "##vso[task.setvariable variable=runtimeResultsArguments]${{ tool.resultsArguments }}"
+              Write-Host "##vso[task.setvariable variable=runtimeNoTestsExitCode]${{ coalesce(tool.noTestsExitCode, -1) }}"
             displayName: 'Set runtime variables'
 
   - pwsh: |
@@ -210,32 +237,35 @@ steps:
                   -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
                   -FilePattern "${{ parameters.files }}"
                   -ResultsDirectory "$(Agent.TempDirectory)"
-                  -AdditionalArguments "${{ parameters.arguments }}"
+                  -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
                   -TestRunnerCommand "$(runtimeRunCmd)"
                   -TestResultsArguments "$(runtimeResultsArguments)"
+                  -NoTestsExitCode $(runtimeNoTestsExitCode)
                 workingDirectory: '$(almguruTemplateFilesPath)'
                 displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
-              environment: ${{ parameters.environment }}
+              environment:
+                ${{ insert }}: ${{ parameters.environment }}
+                ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
 
       - ${{ if eq(parameters.azureSubscription, '') }}:
           - task: PowerShell@2
             displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
             inputs:
               targetType: 'filePath'
-              filePath: 'scripts/Invoke-TestRunner.ps1'
+              filePath: '$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1'
               arguments: >-
                 -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
                 -FilePattern "${{ parameters.files }}"
                 -ResultsDirectory "$(Agent.TempDirectory)"
-                -AdditionalArguments "${{ parameters.arguments }}"
+                -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
                 -TestRunnerCommand "$(runtimeRunCmd)"
                 -TestResultsArguments "$(runtimeResultsArguments)"
+                -NoTestsExitCode $(runtimeNoTestsExitCode)
               pwsh: true
               workingDirectory: '$(almguruTemplateFilesPath)'
-            ${{ if ne(parameters.environment, '') }}:
-              env:
-                ${{ each pair in parameters.environment }}:
-                  ${{ pair.key }}: ${{ pair.value }}
+            env:
+              ${{ insert }}: ${{ parameters.environment }}
+              ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
 
   - task: PublishTestResults@2
     condition: succeededOrFailed()
