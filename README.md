@@ -26,7 +26,7 @@ These templates are designed to be reusable across multiple projects and provide
 - Running Azure CLI commands with different script types
 - Deploying Bicep templates across different Azure scopes
 - Building and pushing Docker images
-- Running acceptance tests with .NET support
+- Running acceptance tests with .NET and Pester support
 - Managing template repository resources
 
 ## Available Templates
@@ -106,8 +106,19 @@ The pipeline actively tests these templates with real execution:
 - **use-template-files.yml** - Tested with repository checkout operations
 - **docker.yml** - Tested with parameter validation scenarios
 - **PowerShell scripts** - Tested with various input conditions
+- **run-acceptance-tests.yml** - Pester execution with latest stable and exact-version overrides, NUnit publishing, filters, and environment injection
 
-**Note**: Templates requiring Azure service connections (bicep-deploy.yml, run-acceptance-tests.yml) are validated structurally and tested in consuming pipelines.
+**Note**: Bicep deployments and authenticated acceptance-test execution require Azure service connections. Those paths are compile-validated here and exercised in consuming pipelines; the Pester runtime also runs without an Azure connection.
+
+Run the focused Pester runtime checks locally with PowerShell 7.2 or newer:
+
+```powershell
+./scripts/Install-PesterRuntime.ps1 -Version latest
+./scripts/tests/Invoke-PesterRuntimeTests.ps1
+```
+
+The checks cover the shared executor, Pester option forwarding, report isolation,
+same-process context preservation, and version selection. No Azure resources are needed.
 
 The testing pipeline runs automatically on:
 - Pull requests to the main branch
