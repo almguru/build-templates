@@ -445,6 +445,14 @@ stages:
 
           - template: pipelines/lib/azure-cli.yml
             parameters:
+              azureSubscription: 'legacy-public-templates'
+              script:
+                type: 'bash'
+                location: 'inlineScript'
+                script: 'echo "legacy parameter compile-time validation"'
+
+          - template: pipelines/lib/azure-cli.yml
+            parameters:
               connectionType: 'azureDevOps'
               serviceConnection: 'public-devops-templates'
               script:
