@@ -14,6 +14,7 @@
 # - Before/after test step hooks for custom setup/teardown
 # - Automatic test result publishing in TRX (.NET) or NUnit XML (Pester) format
 # - Environment variable support for test configuration
+# - Authenticated Az PowerShell for Pester and Azure CLI for other runtimes by default
 #
 # Usage Examples:
 #
@@ -69,10 +70,26 @@
 #         displayName: 'Database Cleanup'
 
 parameters:
-  # Name of the Azure service connection for Key Vault access
+  # Azure Resource Manager service connection for test authentication and Key Vault.
   - name: azureSubscription
     type: string
     default: ''
+
+  # Authenticated tool: auto uses Az PowerShell for Pester, Azure CLI otherwise.
+  # Set cli explicitly for existing Pester tests using az commands.
+  # Without azureSubscription, tests use the regular unauthenticated PowerShell task.
+  - name: azureTool
+    type: string
+    default: 'auto'
+    values:
+      - 'auto'
+      - 'cli'
+      - 'powershell'
+
+  # Az version when using Azure PowerShell: latest installed, or exact (e.g., 14.4.0).
+  - name: azurePowerShellVersion
+    type: string
+    default: 'latest'
 
   # Target environment name (e.g., Development, Staging, Production)
   - name: environmentName
@@ -229,29 +246,54 @@ steps:
 
   - ${{ if ne(parameters.runtimeType, 'none') }}:
       # Run acceptance tests using the configured runtime. Test assemblies and results format are determined by the selected runtime and configuration.
-      # If azureSubscription is provided, use Azure CLI template; otherwise use regular PowerShell task.
+      # The selected Azure task owns authentication; Pester stays in that PowerShell process.
       - ${{ if ne(parameters.azureSubscription, '') }}:
-          - template: azure-cli.yml
-            parameters:
-              serviceConnection: '${{ parameters.azureSubscription }}'
-              defaultScriptType: 'pscore'
-              script:
-                type: 'pscore'
-                location: 'scriptPath'
-                script: 'scripts/Invoke-TestRunner.ps1'
-                arguments: >-
-                  -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
-                  -FilePattern "${{ parameters.files }}"
-                  -ResultsDirectory "$(runtimeResultsDirectory)"
-                  -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
-                  -TestRunnerCommand "$(runtimeRunCmd)"
-                  -TestResultsArguments "$(runtimeResultsArguments)"
-                  -NoTestsExitCode $(runtimeNoTestsExitCode)
-                workingDirectory: '$(almguruTemplateFilesPath)'
-                displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
-              environment:
-                ${{ insert }}: ${{ parameters.environment }}
-                ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
+          - ${{ if or(eq(parameters.azureTool, 'powershell'), and(eq(parameters.azureTool, 'auto'), eq(parameters.runtimeType, 'pester'))) }}:
+              - template: azure-powershell.yml
+                parameters:
+                  serviceConnection: '${{ parameters.azureSubscription }}'
+                  azurePowerShellVersion: '${{ parameters.azurePowerShellVersion }}'
+                  script:
+                    # AzurePowerShell dot-sources file scripts; explicitly forward
+                    # the executor's exit code from an inline, same-process call.
+                    script: |
+                      & "$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1" `
+                      -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}" `
+                      -FilePattern "${{ parameters.files }}" `
+                      -ResultsDirectory "$(runtimeResultsDirectory)" `
+                      -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS `
+                      -TestRunnerCommand "$(runtimeRunCmd)" `
+                      -TestResultsArguments "$(runtimeResultsArguments)" `
+                      -NoTestsExitCode $(runtimeNoTestsExitCode)
+                      exit $LASTEXITCODE
+                    workingDirectory: '$(almguruTemplateFilesPath)'
+                    displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
+                  environment:
+                    ${{ insert }}: ${{ parameters.environment }}
+                    ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
+
+          - ${{ if or(eq(parameters.azureTool, 'cli'), and(eq(parameters.azureTool, 'auto'), ne(parameters.runtimeType, 'pester'))) }}:
+              - template: azure-cli.yml
+                parameters:
+                  serviceConnection: '${{ parameters.azureSubscription }}'
+                  defaultScriptType: 'pscore'
+                  script:
+                    type: 'pscore'
+                    location: 'scriptPath'
+                    script: 'scripts/Invoke-TestRunner.ps1'
+                    arguments: >-
+                      -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}"
+                      -FilePattern "${{ parameters.files }}"
+                      -ResultsDirectory "$(runtimeResultsDirectory)"
+                      -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
+                      -TestRunnerCommand "$(runtimeRunCmd)"
+                      -TestResultsArguments "$(runtimeResultsArguments)"
+                      -NoTestsExitCode $(runtimeNoTestsExitCode)
+                    workingDirectory: '$(almguruTemplateFilesPath)'
+                    displayName: 'Run acceptance tests (${{ parameters.runtimeType }})'
+                  environment:
+                    ${{ insert }}: ${{ parameters.environment }}
+                    ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
 
       - ${{ if eq(parameters.azureSubscription, '') }}:
           - task: PowerShell@2

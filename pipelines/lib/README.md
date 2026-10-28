@@ -8,6 +8,7 @@ This directory contains reusable Azure DevOps YAML pipeline templates for common
 |----------|---------|--------------|
 | [build-dotnet.yml](#build-dotnet-template) | Build, test, and publish .NET projects | Multi-framework support, code signing, test coverage reporting |
 | [azure-cli.yml](#azure-cli-template) | Execute Azure CLI commands | Multi-script support, configurable environments |
+| [azure-powershell.yml](#azure-powershell-template) | Execute Az PowerShell scripts | Service-connection authentication, inline/file scripts, configurable Az versions |
 | [bicep-deploy.yml](#bicep-deploy-template) | Deploy Azure Bicep templates | Multi-scope deployment, automatic output variables |
 | [docker.yml](#docker-build-template) | Build and push Docker images | Multi-image support, configurable registries |
 | [run-acceptance-tests.yml](#run-acceptance-tests-template) | Run acceptance tests | .NET and Pester support, Key Vault integration, custom hooks |
@@ -244,6 +245,76 @@ To use an Azure DevOps service connection instead:
       location: 'inlineScript'
       script: |
         az devops project list --organization https://dev.azure.com/my-organization
+```
+
+## Azure PowerShell Template
+
+**Location:** `pipelines/lib/azure-powershell.yml`
+
+Runs scripts using [`AzurePowerShell@5`](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/azure-powershell-v5).
+The task authenticates Az PowerShell through an Azure Resource Manager service
+connection; scripts do not need `Connect-AzAccount`. It does **not** run
+`az login` or authenticate Azure CLI.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `serviceConnection` | string | `''` | Required Azure Resource Manager service connection |
+| `defaultDisplayName` | string | `'Azure PowerShell script'` | Display name when absent from `script` |
+| `azurePowerShellVersion` | string | `'latest'` | Latest installed Az version, or an exact version such as `'14.4.0'` |
+| `pwsh` | boolean | `true` | Use PowerShell Core on Windows as well as Linux |
+| `script` | object | `{}` | Required script configuration below |
+| `environment` | object | `{}` | Environment variables for the authenticated script |
+
+`latest` means the latest **installed** Az version, not the latest release from
+PowerShell Gallery. Ensure the agent provides PowerShell and the required Az
+modules/version. Version wildcards and prereleases are not supported.
+
+### Script Object Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `location` | string | No | `inlineScript` (default) or `scriptPath` |
+| `script` | string | Yes | Inline PowerShell code or a `.ps1` file path |
+| `arguments` | string | No | PowerShell arguments for file scripts only; quote values containing spaces |
+| `displayName` | string | No | Custom display name |
+| `workingDirectory` | string | No | Defaults to `$(System.DefaultWorkingDirectory)`; when explicitly set, file paths are prefixed with this directory |
+
+The CLI-only `type` and `addSpnToEnvironment` properties do not apply.
+This is a thin task wrapper: input validation is handled by AzurePowerShell@5,
+with no extra validation task. PowerShell terminating errors fail execution.
+AzurePowerShell dot-sources file scripts; for executables or runners that return
+exit codes, use an inline call followed by `exit $LASTEXITCODE`, as the acceptance
+template does, or explicitly throw on failure in your script.
+
+### Usage Examples
+
+```yaml
+- template: pipelines/lib/azure-powershell.yml@almguru-templates
+  parameters:
+    serviceConnection: 'my-azure-connection'
+    script:
+      displayName: 'List resource groups'
+      script: |
+        Get-AzContext
+        Get-AzResourceGroup
+    environment:
+      TARGET_ENVIRONMENT: 'Staging'
+```
+
+For a checked-out script accepting a `ResourceGroupName` parameter:
+
+```yaml
+- template: pipelines/lib/azure-powershell.yml@almguru-templates
+  parameters:
+    serviceConnection: 'my-azure-connection'
+    azurePowerShellVersion: '14.4.0'
+    script:
+      location: 'scriptPath'
+      script: 'scripts/Test-Resources.ps1'
+      arguments: '-ResourceGroupName "my-resource-group"'
+      workingDirectory: '$(Build.SourcesDirectory)'
 ```
 
 ## Bicep Deploy Template
@@ -501,7 +572,9 @@ For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersio
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `azureSubscription` | string | `''` | Azure service connection name for Key Vault access |
+| `azureSubscription` | string | `''` | Azure Resource Manager service connection for test authentication and Key Vault |
+| `azureTool` | string | `'auto'` | `auto`: PowerShell for Pester, CLI otherwise; explicit `cli` or `powershell` overrides |
+| `azurePowerShellVersion` | string | `'latest'` | Latest installed or exact Az version when the selected tool is PowerShell |
 | `environmentName` | string | Required | Target environment name (e.g., Development, Staging, Production) |
 | `keyVaultName` | string | `''` | Azure Key Vault name for retrieving secrets |
 | `keyVaultValuesFilter` | string | `'*'` | Filter pattern for Key Vault secrets (e.g., 'ConnectionString*') |
@@ -518,6 +591,7 @@ For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersio
 ### Features
 
 - **Multi-Runtime Support:** Supports .NET test assemblies and Pester scripts with configurable versions
+- **Azure Authentication:** Runtime-aware CLI/PowerShell selection with explicit overrides
 - **Azure Key Vault Integration:** Automatically retrieves secrets and configuration
 - **Custom Hooks:** Before/after test step hooks for setup/teardown
 - **Test Result Publishing:** Automatic TRX (.NET) or NUnit XML (Pester) publishing
@@ -632,7 +706,12 @@ fail a suite that executes other tests; an entirely filtered-out suite fails.
 Empty suites, discovery errors, and failing tests also fail execution. Reports
 are published using the existing `PublishTestResults@2` step even when tests fail.
 
-#### Pester with Authenticated Azure CLI
+#### Pester with Authenticated Az PowerShell (Default)
+
+With `azureSubscription`, Pester now defaults to `AzurePowerShell@5`. The task
+establishes an Az context, and `Invoke-TestRunner.ps1` calls the Pester adapter
+in the **same PowerShell process**. Tests can use Az cmdlets without their own
+`Connect-AzAccount` call.
 
 ```yaml
 - template: pipelines/lib/use-template-files.yml@almguru-templates
@@ -643,6 +722,7 @@ are published using the existing `PublishTestResults@2` step even when tests fai
     azureSubscription: 'MyAzureConnection'
     environmentName: 'Staging'
     runtimeType: 'pester'
+    # azureTool: auto is the default; powershell explicitly selects the same tool.
     artifactName: 'acceptance-tests'
     files: '**/*.Tests.ps1'
     arguments: '-TagFilter Azure -Output Detailed'
@@ -650,13 +730,61 @@ are published using the existing `PublishTestResults@2` step even when tests fai
       RESOURCE_GROUP: 'my-test-resource-group'
 ```
 
-With `azureSubscription`, the existing Azure CLI task runs
+A staged Pester file can use the task-authenticated context directly:
+
+```powershell
+Describe 'Azure resources' {
+    It 'has an authenticated context' -Tag Azure {
+        (Get-AzContext).Subscription.Id | Should -Not -BeNullOrEmpty
+    }
+
+    It 'finds the expected resource group' -Tag Azure {
+        Get-AzResourceGroup -Name $env:RESOURCE_GROUP | Should -Not -BeNullOrEmpty
+    }
+}
+```
+
+`azurePowerShellVersion` can pin the installed Az version independently of
+`runtimeVersion`, which controls Pester or .NET. Pester requires PowerShell 7.2
+or newer. Authentication belongs to this task only; before/after hooks remain
+separate pipeline steps, not shared sessions. .NET child processes do not
+automatically inherit an in-memory Az PowerShell context.
+
+#### Pester with Authenticated Azure CLI (Explicit Override)
+
+**Migration:** Existing Pester tests using `az` must set `azureTool: cli` to
+retain their previous authenticated CLI behavior. Azure PowerShell does not
+also run `az login`; each invocation selects only one authenticated tool.
+
+```yaml
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
+# Stage/download scripts into $(Pipeline.Workspace)/acceptance-tests first.
+- template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
+  parameters:
+    azureSubscription: 'MyAzureConnection'
+    azureTool: 'cli'
+    environmentName: 'Staging'
+    runtimeType: 'pester'
+    artifactName: 'acceptance-tests'
+    files: '**/*.Tests.ps1'
+    arguments: '-TagFilter Azure -Output Detailed'
+    environment:
+      RESOURCE_GROUP: 'my-test-resource-group'
+```
+
+With `azureTool: cli` and `azureSubscription`, the existing Azure CLI task runs
 `Invoke-TestRunner.ps1`, which calls the Pester adapter **in the same PowerShell
 process**. Tests inherit the task's environment and Azure CLI configuration and
 can call authenticated `az` commands without another login. This does **not**
 establish an Az PowerShell `Connect-AzAccount` session. Optional Key Vault retrieval
 and before/after hooks retain their existing behavior; hooks are separate
 pipeline steps, not shared PowerShell sessions.
+
+For .NET, `azureTool: auto` retains the Azure CLI default. Either runtime can
+explicitly select either tool. Without `azureSubscription`, the existing
+unauthenticated PowerShell task is used regardless of `azureTool`; no Azure
+login is attempted. With `runtimeType: none`, no test execution task is emitted.
 
 #### With Custom Environment Variables and Test Arguments
 

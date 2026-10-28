@@ -24,6 +24,7 @@ Collection of useful templates for Azure DevOps YAML pipelines. This repository 
 
 These templates are designed to be reusable across multiple projects and provide standardized patterns for:
 - Running Azure CLI commands with different script types
+- Running authenticated Az PowerShell scripts through Azure service connections
 - Deploying Bicep templates across different Azure scopes
 - Building and pushing Docker images
 - Running acceptance tests with .NET and Pester support
@@ -35,6 +36,7 @@ These templates are designed to be reusable across multiple projects and provide
 |----------|---------|--------------|
 | `build-dotnet.yml` | Build, test, and publish .NET projects | [View Details](pipelines/lib/README.md#build-dotnet-template) |
 | `azure-cli.yml` | Execute Azure CLI commands | [View Details](pipelines/lib/README.md#azure-cli-template) |
+| `azure-powershell.yml` | Execute authenticated Az PowerShell scripts | [View Details](pipelines/lib/README.md#azure-powershell-template) |
 | `bicep-deploy.yml` | Deploy Azure Bicep templates | [View Details](pipelines/lib/README.md#bicep-deploy-template) |
 | `docker.yml` | Build and push Docker images | [View Details](pipelines/lib/README.md#docker-build-template) |
 | `run-acceptance-tests.yml` | Run acceptance tests | [View Details](pipelines/lib/README.md#run-acceptance-tests-template) |
@@ -103,10 +105,16 @@ This repository includes an automated Azure Pipeline (`azure-pipelines.yml`) tha
 The pipeline actively tests these templates with real execution:
 
 - **azure-cli.yml** - Tested with bash, PowerShell Core, and environment variables; compile-validated with Azure RM and structurally validated for Azure DevOps connection routing
+- **azure-powershell.yml** - Task mappings; compile cases for inline/file scripts, environments, and Az versions
 - **use-template-files.yml** - Tested with repository checkout operations
 - **docker.yml** - Tested with parameter validation scenarios
 - **PowerShell scripts** - Tested with various input conditions
 - **run-acceptance-tests.yml** - Pester execution with latest stable and exact-version overrides, NUnit publishing, filters, and environment injection
+
+Authenticated acceptance tests default to **Az PowerShell for Pester** and
+**Azure CLI for .NET**. Set `azureTool: cli` or `azureTool: powershell` to override.
+Existing Pester suites using `az` commands must now explicitly set `azureTool: cli`.
+The selected task authenticates only its own tool, not both.
 
 **Note**: Bicep deployments and authenticated acceptance-test execution require Azure service connections. Those paths are compile-validated here and exercised in consuming pipelines; the Pester runtime also runs without an Azure connection.
 
@@ -118,7 +126,9 @@ Run the focused Pester runtime checks locally with PowerShell 7.2 or newer:
 ```
 
 The checks cover the shared executor, Pester option forwarding, report isolation,
-same-process context preservation, and version selection. No Azure resources are needed.
+same-process environment/module context preservation, Azure PowerShell-style
+exit-code forwarding, and version selection. No Azure resources are needed;
+these checks do not verify live Azure authentication.
 
 The testing pipeline runs automatically on:
 - Pull requests to the main branch

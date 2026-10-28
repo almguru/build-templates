@@ -64,7 +64,7 @@ stages:
   # Note: The azure-cli.yml template requires a valid Azure service connection.
   # These tests verify the template structure and parameter handling without actual Azure operations.
   - stage: TestAzureCLI
-    displayName: 'Test azure-cli.yml Template'
+    displayName: 'Test Azure CLI and PowerShell Templates'
     dependsOn: Setup
     jobs:
       - job: VerifyTemplateStructure
@@ -136,6 +136,36 @@ stages:
                 
                 Write-Host "##[section]Template structure verification completed successfully"
               pwsh: true
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $content = Get-Content 'pipelines/lib/azure-powershell.yml' -Raw
+              if ($content -match '(?m)^  - (pwsh|powershell|script):') {
+                  throw 'The Azure PowerShell template must remain a thin task wrapper.'
+              }
+              $environmentInsertion = '$' + '{{ insert }}: $' + '{{ parameters.environment }}'
+              foreach ($element in @(
+                  'AzurePowerShell@5', 'parameters.serviceConnection',
+                  "ScriptType: 'FilePath'", "ScriptType: 'InlineScript'",
+                  'ScriptPath:', 'ScriptArguments:', 'Inline:',
+                  "azurePowerShellVersion: 'LatestVersion'",
+                  "azurePowerShellVersion: 'OtherVersion'",
+                  'preferredAzurePowerShellVersion:', 'pwsh:', 'workingDirectory:',
+                  $environmentInsertion
+              )) {
+                  if (-not $content.Contains($element)) { throw "Missing PowerShell mapping: $element" }
+              }
+              $runner = Get-Content 'pipelines/lib/run-acceptance-tests.yml' -Raw
+              foreach ($element in @(
+                  "default: 'auto'", 'template: azure-powershell.yml', 'template: azure-cli.yml',
+                  "or(eq(parameters.azureTool, 'powershell'), and(eq(parameters.azureTool, 'auto'), eq(parameters.runtimeType, 'pester')))",
+                  "or(eq(parameters.azureTool, 'cli'), and(eq(parameters.azureTool, 'auto'), ne(parameters.runtimeType, 'pester')))",
+                  "if eq(parameters.azureSubscription, '')", 'task: PowerShell@2'
+              )) {
+                  if (-not $runner.Contains($element)) { throw "Missing acceptance routing: $element" }
+              }
+              Write-Host 'Azure PowerShell mappings and acceptance routing checks passed.'
+            displayName: 'Verify Azure PowerShell template and acceptance routing'
 
       - job: TestScriptExecution
         displayName: 'Test script execution (without Azure connection)'
@@ -438,6 +468,7 @@ stages:
               runtimeVersion: '$(pesterRequestedVersion)'
               artifactName: 'pester-tests'
               files: 'Context.Tests.ps1'
+              azureTool: 'powershell' # No service connection: still uses PowerShell@2.
               suiteName: 'Second isolated Pester suite'
               arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
               environment:
@@ -482,6 +513,7 @@ stages:
               script: |
                 $templates = @(
                   'pipelines/lib/azure-cli.yml',
+                  'pipelines/lib/azure-powershell.yml',
                   'pipelines/lib/build-dotnet.yml',
                   'pipelines/lib/bicep-deploy.yml',
                   'pipelines/lib/docker.yml',
@@ -536,6 +568,26 @@ stages:
                 location: 'inlineScript'
                 script: 'echo "legacy parameter compile-time validation"'
 
+          - template: pipelines/lib/azure-powershell.yml
+            parameters:
+              serviceConnection: 'public-templates'
+              script:
+                script: 'Get-AzContext'
+              environment:
+                TEST_VAR: 'inline environment'
+
+          - template: pipelines/lib/azure-powershell.yml
+            parameters:
+              serviceConnection: 'public-templates'
+              azurePowerShellVersion: '14.4.0'
+              script:
+                location: 'scriptPath'
+                script: 'scripts/Invoke-TestRunner.ps1'
+                workingDirectory: '$(Pipeline.Workspace)/path with spaces'
+                arguments: '-SearchPath "artifact with spaces"'
+              environment:
+                TEST_VAR: 'file environment'
+
           - template: pipelines/lib/bicep-deploy.yml
             parameters:
               azureSubscription: 'public-templates'
@@ -562,15 +614,26 @@ stages:
               runtimeType: 'none'
               suiteName: 'Compile-time validation'
 
-          - template: pipelines/lib/run-acceptance-tests.yml
-            parameters:
-              azureSubscription: 'public-templates'
-              environmentName: 'CompileValidation'
-              runtimeType: 'pester'
-              files: '**/*.Tests.ps1'
-              arguments: '-TagFilter Smoke -FullNameFilter "Acceptance runtime.*"'
-              environment:
-                PESTER_CONTEXT_VALUE: 'compile validation'
+          - ${{ each runtime in split('dotnet,pester', ',') }}:
+              # Omitted selector exercises the public default for each runtime.
+              - template: pipelines/lib/run-acceptance-tests.yml
+                parameters:
+                  azureSubscription: 'public-templates'
+                  environmentName: 'CompileValidation'
+                  runtimeType: ${{ runtime }}
+
+              - ${{ each tool in split('auto,cli,powershell', ',') }}:
+                  - template: pipelines/lib/run-acceptance-tests.yml
+                    parameters:
+                      azureSubscription: 'public-templates'
+                      azureTool: ${{ tool }}
+                      azurePowerShellVersion: '14.4.0'
+                      environmentName: 'CompileValidation'
+                      runtimeType: ${{ runtime }}
+                      files: '**/*Tests.*'
+                      arguments: '-TagFilter Smoke -FullNameFilter "Acceptance runtime.*"'
+                      environment:
+                        PESTER_CONTEXT_VALUE: 'compile validation'
 
   # Summary stage
   - stage: TestSummary
@@ -661,7 +724,7 @@ stages:
                 
                 | Stage | Status | Result |
                 |-------|--------|--------|
-                | azure-cli.yml Template Tests | $(Get-StatusEmoji $azureCliResult) | $azureCliResult |
+                | Azure CLI/PowerShell Template Tests | $(Get-StatusEmoji $azureCliResult) | $azureCliResult |
                 | use-template-files.yml Tests | $(Get-StatusEmoji $useTemplateFilesResult) | $useTemplateFilesResult |
                 | build-dotnet.yml Template Tests | $(Get-StatusEmoji $buildDotNetResult) | $buildDotNetResult |
                 | docker.yml Template Tests | $(Get-StatusEmoji $dockerResult) | $dockerResult |
@@ -683,6 +746,15 @@ stages:
                 
                 **Status:** $azureCliResult
                 
+                ### azure-powershell.yml
+                **Test Coverage:**
+                - Task input mappings, inline/file scripts, environment and version configuration
+                - Thin task wrapper using native AzurePowerShell input validation
+                - Acceptance runtime-based routing and explicit overrides
+                - Never-run compile cases; no live Azure authentication in this pipeline
+
+                **Status:** $azureCliResult
+
                 ### ✅ use-template-files.yml
                 **Test Coverage:**
                 - Repository checkout operations
@@ -721,7 +793,8 @@ stages:
                 - Actual template execution with latest stable Pester and an exact Pester 5 override
                 - Root/nested test scripts, isolated NUnit reports, and environment injection
                 - Filters, quoted arguments, failures, version selection, and in-process context
-                - Authenticated Azure CLI path compile validation (live authentication tested by consuming pipelines)
+                - Azure CLI and PowerShell path compile validation (live authentication requires a consuming pipeline)
+                - Inline executor preserves in-memory module state and propagates test failures
 
                 **Status:** $pesterResult
                 
@@ -818,6 +891,7 @@ stages:
                 Write-Host ""
                 Write-Host "Templates tested by structure verification:"
                 Write-Host "  ✓ azure-cli.yml - Multiple script types and configurations"
+                Write-Host "  - azure-powershell.yml - Mappings and acceptance routing"
                 Write-Host "  ✓ use-template-files.yml - Repository checkout"
                 Write-Host "  ✓ docker.yml - Parameter validation"
                 Write-Host "  ✓ build-dotnet.yml - Sample build and test"

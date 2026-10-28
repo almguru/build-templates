@@ -3,7 +3,7 @@
     Exercises the acceptance-test executor and Pester runtime without Azure resources.
 .DESCRIPTION
     Uses temporary fixtures to check real execution, NUnit reports, option forwarding,
-    inherited context, and .NET-style runner arguments. Stubs Gallery commands to
+    inherited environment/module session context, and .NET-style runner arguments. Stubs Gallery commands to
     verify version selection and error handling without extra network installations.
 .PARAMETER PesterVersion
     Exact installed Pester version to exercise. Defaults to the highest installed version.
@@ -23,7 +23,7 @@ $adapter = Join-Path $scriptsPath 'Invoke-PesterRunner.ps1'
 $installer = Join-Path $scriptsPath 'Install-PesterRuntime.ps1'
 $root = Join-Path ([IO.Path]::GetTempPath()) "pester-runtime-$([guid]::NewGuid())"
 $oldEnvironment = @{}
-foreach ($name in @('PESTER_EXPECTED_PID', 'PESTER_EXPECTED_VERSION', 'AZURE_CONFIG_DIR', 'PESTER_EXPECTED_CONFIG', 'RUNNER_CAPTURE', 'ALMGURU_TEST_RUNNER_ARGUMENTS', 'PESTER_CONTEXT_VALUE', 'PESTER_CONTEXT_VERSION')) {
+foreach ($name in @('PESTER_EXPECTED_PID', 'PESTER_EXPECTED_VERSION', 'PESTER_EXPECTED_SESSION', 'AZURE_CONFIG_DIR', 'PESTER_EXPECTED_CONFIG', 'RUNNER_CAPTURE', 'ALMGURU_TEST_RUNNER_ARGUMENTS', 'PESTER_CONTEXT_VALUE', 'PESTER_CONTEXT_VERSION')) {
     $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
 }
 $checks = 0
@@ -78,11 +78,20 @@ try {
     $env:PESTER_EXPECTED_VERSION = $PesterVersion
     $env:AZURE_CONFIG_DIR = Join-Path $root 'Azure CLI context'
     $env:PESTER_EXPECTED_CONFIG = $env:AZURE_CONFIG_DIR
+    $env:PESTER_EXPECTED_SESSION = [guid]::NewGuid().ToString()
+    # Model Az's in-memory module state without authenticating or saving context.
+    $sessionModule = Write-Fixture 'AcceptanceContextFixture.psm1' @'
+$script:sessionToken = $env:PESTER_EXPECTED_SESSION
+function Get-AcceptanceSessionToken { $script:sessionToken }
+Export-ModuleMember -Function Get-AcceptanceSessionToken
+'@
+    Import-Module $sessionModule -Global
     $passing = @'
 Describe 'Runtime context' {
     It 'keeps the authenticated host context' -Tag Smoke {
         $PID | Should -Be ([int]$env:PESTER_EXPECTED_PID)
         $env:AZURE_CONFIG_DIR | Should -Be $env:PESTER_EXPECTED_CONFIG
+        Get-AcceptanceSessionToken | Should -Be $env:PESTER_EXPECTED_SESSION
         (Get-Command Invoke-Pester).Module.Version.ToString() | Should -Be $env:PESTER_EXPECTED_VERSION
     }
     It 'supports another tag' -Tag Slow { 1 | Should -Be 1 }
@@ -122,6 +131,7 @@ Describe 'Runtime context' {
     $wrapper = Write-Fixture 'Task-Wrapper.ps1' @'
 param($ScriptsPath, $FixtureRoot, $PesterVersion)
 $env:PESTER_EXPECTED_PID = "$PID"
+Import-Module "$FixtureRoot/AcceptanceContextFixture.psm1" -Global
 & "$ScriptsPath/Invoke-TestRunner.ps1" -SearchPath "$FixtureRoot/input" `
     -FilePattern "**/*.Tests.ps1" -ResultsDirectory "$FixtureRoot/wrapper results" `
     -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS `
@@ -133,6 +143,30 @@ exit $LASTEXITCODE
     $wrapperOutput = & pwsh -NoProfile -File $wrapper -ScriptsPath $scriptsPath -FixtureRoot $root -PesterVersion $PesterVersion 6>&1
     Assert-True ($LASTEXITCODE -eq 0) "Task-style environment argument transport failed: $wrapperOutput"
     Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $root 'wrapper results') -Filter '*.pester.xml').Count -eq 2) 'Task wrapper must run both files.'
+    $checks++
+
+    $templatePath = Join-Path $scriptsPath '../pipelines/lib/run-acceptance-tests.yml'
+    $template = Get-Content -LiteralPath $templatePath -Raw
+    $inlineMatch = [regex]::Match($template, '(?ms)^                    script: \|\r?\n(?<body>.*?)^                    workingDirectory:')
+    Assert-True $inlineMatch.Success 'Azure PowerShell inline runner script must be present.'
+    $inlineRunner = ($inlineMatch.Groups['body'].Value -replace '(?m)^                      ', '').
+        Replace('$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1', '$ScriptsPath/Invoke-TestRunner.ps1').
+        Replace('$(Pipeline.Workspace)/${{ parameters.artifactName }}', '$FixtureRoot/input').
+        Replace('${{ parameters.files }}', '$Pattern').
+        Replace('$(runtimeResultsDirectory)', '$FixtureRoot/Azure PowerShell results').
+        Replace('$(runtimeRunCmd)', '$Command').
+        Replace('$(runtimeResultsArguments)', '$ReportArguments').
+        Replace('$(runtimeNoTestsExitCode)', '11')
+    $wrapperSetup = @'
+param($ScriptsPath, $FixtureRoot, $Pattern, $Command, $ReportArguments)
+$env:PESTER_EXPECTED_PID = "$PID"
+Import-Module "$FixtureRoot/AcceptanceContextFixture.psm1" -Global
+'@
+    $azurePowerShellWrapper = Write-Fixture 'Azure-PowerShell-Wrapper.ps1' ($wrapperSetup + "`n" + $inlineRunner)
+    $wrapperOutput = & pwsh -NoProfile -File $azurePowerShellWrapper -ScriptsPath $scriptsPath `
+        -FixtureRoot $root -Pattern '**/*.Tests.ps1' -Command $adapter -ReportArguments "NUnitXml $PesterVersion" 6>&1
+    Assert-True ($LASTEXITCODE -eq 0) "Azure PowerShell-style inline execution lost session state or arguments: $wrapperOutput"
+    Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $root 'Azure PowerShell results') -Filter '*.pester.xml').Count -eq 2) 'Azure PowerShell executor must publish both reports.'
     $checks++
 
     $env:PESTER_CONTEXT_VALUE = 'pipeline context'
@@ -148,6 +182,11 @@ exit $LASTEXITCODE
     $null = Write-Fixture 'input/discovery/Broken.Tests.ps1' "throw 'Discovery fixture failure'"
     $null = Write-Fixture 'input/empty/Empty.Tests.ps1' "Describe 'Empty' {}"
     $null = Write-Fixture 'input/tagged/Slow.Tests.ps1' "Describe 'Slow only' { It 'is slow' -Tag Slow { 1 | Should -Be 1 } }"
+    $env:ALMGURU_TEST_RUNNER_ARGUMENTS = ''
+    $wrapperOutput = & pwsh -NoProfile -File $azurePowerShellWrapper -ScriptsPath $scriptsPath `
+        -FixtureRoot $root -Pattern 'failing/*.Tests.ps1' -Command $adapter -ReportArguments "NUnitXml $PesterVersion" 6>&1
+    Assert-True ($LASTEXITCODE -eq 1) "Azure PowerShell executor must propagate failing tests: $wrapperOutput"
+    $checks++
     $null = Invoke-Case '**/*.Tests.ps1' '-TagFilter Smoke -ExcludePath "**/failing/*" "**/discovery/*" "**/empty/*"'
     $null = Invoke-Case 'failing/*.Tests.ps1' -ExpectedExit 1
     $null = Invoke-Case 'discovery/*.Tests.ps1' -ExpectedExit 1
@@ -185,6 +224,16 @@ exit 0
         -Command 'pwsh' -ReportArguments '--report-trx --results-directory'
     $nativeArguments = @(Get-Content -LiteralPath $env:RUNNER_CAPTURE -Raw | ConvertFrom-Json)
     Assert-True ($nativeArguments[0] -eq '--report-trx' -and $nativeArguments[-1] -eq 'Category=Smoke Test') 'Native executables must retain argument boundaries.'
+
+    $null = Write-Fixture 'input/native/Failed.Tests.ps1' @'
+param([Parameter(ValueFromRemainingArguments)] [string[]]$Values)
+exit 23
+'@
+    $wrapperOutput = & pwsh -NoProfile -File $azurePowerShellWrapper -ScriptsPath $scriptsPath `
+        -FixtureRoot $root -Pattern 'native/Failed.Tests.ps1' -Command 'pwsh' `
+        -ReportArguments '--report-trx --results-directory' 6>&1
+    Assert-True ($LASTEXITCODE -eq 23) "Azure PowerShell executor must preserve native runner failure codes: $wrapperOutput"
+    $checks++
 
     $installation = @{ Requested = $null; Installed = $null; Available = '6.2.0'; FailLookup = $false; FailInstall = $false }
     function Find-Module {
@@ -230,6 +279,7 @@ exit 0
     Write-Host "Passed $checks executor/adapter cases, report/context assertions, and version-selection cases (Pester $PesterVersion)."
 }
 finally {
+    Remove-Module AcceptanceContextFixture -ErrorAction SilentlyContinue
     foreach ($name in $oldEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name])
     }
