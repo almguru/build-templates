@@ -10,7 +10,7 @@ This directory contains reusable Azure DevOps YAML pipeline templates for common
 | [azure-cli.yml](#azure-cli-template) | Execute Azure CLI commands | Multi-script support, configurable environments |
 | [bicep-deploy.yml](#bicep-deploy-template) | Deploy Azure Bicep templates | Multi-scope deployment, automatic output variables |
 | [docker.yml](#docker-build-template) | Build and push Docker images | Multi-image support, configurable registries |
-| [run-acceptance-tests.yml](#run-acceptance-tests-template) | Run acceptance tests | .NET support, Key Vault integration, custom hooks |
+| [run-acceptance-tests.yml](#run-acceptance-tests-template) | Run acceptance tests | .NET and Pester support, Key Vault integration, custom hooks |
 | [use-template-files.yml](#use-template-files-template) | Checkout template repository | Template resource management |
 
 ## Required Repository Setup
@@ -491,7 +491,7 @@ Template for building and pushing Docker images to container registries with sup
 
 **Location:** `pipelines/lib/run-acceptance-tests.yml`
 
-Template for running acceptance tests in Azure DevOps pipelines with support for .NET test assemblies, Azure Key Vault integration, and custom test configuration.
+Template for running acceptance tests in Azure DevOps pipelines with support for .NET test assemblies, Pester test scripts, Azure Key Vault integration, and custom test configuration.
 
 ### Parameters
 
@@ -504,19 +504,19 @@ Template for running acceptance tests in Azure DevOps pipelines with support for
 | `beforeTestsSteps` | stepList | `[]` | Custom steps to execute before running tests |
 | `afterTestsSteps` | stepList | `[]` | Custom steps to execute after running tests |
 | `suiteName` | string | `''` | Descriptive name for the test suite |
-| `runtimeType` | string | `'none'` | Runtime environment (`none`, `dotnet`) |
-| `runtimeVersion` | string | `''` | .NET version (e.g., '8.x', '9.x') |
-| `artifactName` | string | `'deploy'` | Pipeline artifact containing test assemblies |
-| `files` | string | `'**/*Tests.dll'` | Glob pattern to locate test assemblies |
-| `arguments` | string | `''` | Additional arguments for test runner |
+| `runtimeType` | string | `'none'` | Runtime environment (`none`, `dotnet`, `pester`) |
+| `runtimeVersion` | string | `''` | .NET SDK version (default `9.x`), or Pester `latest` / exact stable version >= 5 (default `latest`) |
+| `artifactName` | string | `'deploy'` | Directory under `$(Pipeline.Workspace)` containing staged/downloaded tests |
+| `files` | string | `'**/*Tests.dll'` | Test-file glob; explicitly use `'**/*.Tests.ps1'` for Pester |
+| `arguments` | string | `''` | Additional runner arguments; quote values containing spaces. See Pester options below |
 | `environment` | object | `{}` | Environment variables for test execution |
 
 ### Features
 
-- **Multi-Runtime Support:** Supports .NET test assemblies with configurable versions
+- **Multi-Runtime Support:** Supports .NET test assemblies and Pester scripts with configurable versions
 - **Azure Key Vault Integration:** Automatically retrieves secrets and configuration
 - **Custom Hooks:** Before/after test step hooks for setup/teardown
-- **Test Result Publishing:** Automatic publishing in .trx format
+- **Test Result Publishing:** Automatic TRX (.NET) or NUnit XML (Pester) publishing
 - **Environment Variables:** Support for custom environment configuration
 - **Template Files Integration:** Works with `use-template-files.yml` template
 
@@ -550,6 +550,110 @@ Template for running acceptance tests in Azure DevOps pipelines with support for
     runtimeType: 'dotnet'
     suiteName: 'Integration Tests'
 ```
+
+#### Pester Acceptance Tests
+
+The agent needs PowerShell 7.2 or newer and access to PowerShell Gallery.
+Pester defaults to `latest`, resolving and installing the newest **stable** release
+across major versions in CurrentUser scope. Prereleases are excluded. The resolved
+version is logged and imported exactly; lookup/install failures do not fall back
+to an older installed module. Set `runtimeVersion` to an exact stable Pester
+version (5 or newer) for reproducibility. Future major releases may require
+template updates.
+
+The runner imports the resolved version even when other versions are installed.
+Do not preload a different Pester major in the same execution host: incompatible
+Pester assemblies cannot be replaced in-process. Such an import fails explicitly
+rather than launching a new process and losing the shared host context.
+
+Stage or download the test scripts and any supporting modules into
+`$(Pipeline.Workspace)/<artifactName>` before calling the template. The template
+does not download that artifact automatically.
+
+```yaml
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
+# Download/stage your scripts into $(Pipeline.Workspace)/acceptance-tests first.
+- template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
+  parameters:
+    environmentName: 'Development'
+    runtimeType: 'pester'
+    # Omit runtimeVersion for latest stable, including future major versions.
+    runtimeVersion: '6.2.0'
+    artifactName: 'acceptance-tests'
+    files: '**/*.Tests.ps1'
+    suiteName: 'PowerShell API tests'
+    arguments: '-TagFilter Smoke,API -ExcludeTagFilter Destructive -Output Detailed'
+    environment:
+      API_BASE_URL: 'https://api.example.com'
+```
+
+Pester options are forwarded through `parameters.arguments` and mapped into
+Pester configuration:
+
+| Option | Values |
+|--------|--------|
+| `-TagFilter` | Include tags; comma-separated or space-separated values, or repeat the option |
+| `-ExcludeTagFilter` | Exclude tags; same list syntax as `-TagFilter` |
+| `-FullNameFilter` | One or more wildcard full-name filters; quote each name containing spaces |
+| `-ExcludePath` | One or more full-path wildcard filters; quote paths containing spaces |
+| `-Output` | One of `None`, `Minimal`, `Normal`, `Detailed`, `Diagnostic` |
+
+Filters retain Pester's semantics: tag and full-name inclusion filters are
+combined with OR, not AND. Use exclusion filters to remove tests regardless of
+which inclusion filter matched.
+
+For example:
+
+```yaml
+arguments: >-
+  -TagFilter Smoke API
+  -FullNameFilter "API acceptance.*" "Database acceptance.*"
+  -ExcludePath "**/destructive tests/*"
+  -Output Detailed
+```
+
+Single or double quotes group literal values; use the other quote style for a
+value containing a quote. Arguments are not evaluated as PowerShell code.
+Malformed options/quotes, missing values, and unsupported options fail explicitly.
+The template controls paths, report configuration, and host lifetime, so Pester
+`-Path`, `-Configuration`, `-Container`, `-CI`, and `-PassThru` are not forwarded.
+`ALMGURU_TEST_RUNNER_ARGUMENTS` is reserved for internal argument transport.
+
+Each selected file runs separately through `Invoke-TestRunner.ps1`, with a
+distinct path-derived `*.pester.xml` NUnit report in a fresh per-invocation
+subdirectory of `$(Agent.TempDirectory)`. Both execution and publication use
+`$(runtimeResultsDirectory)`, so later suites do not republish earlier reports.
+Shared cross-file fixtures are not supported. Files excluded by filters do not
+fail a suite that executes other tests; an entirely filtered-out suite fails.
+Empty suites, discovery errors, and failing tests also fail execution. Reports
+are published using the existing `PublishTestResults@2` step even when tests fail.
+
+#### Pester with Authenticated Azure CLI
+
+```yaml
+- template: pipelines/lib/use-template-files.yml@almguru-templates
+
+# Stage/download scripts into $(Pipeline.Workspace)/acceptance-tests first.
+- template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
+  parameters:
+    azureSubscription: 'MyAzureConnection'
+    environmentName: 'Staging'
+    runtimeType: 'pester'
+    artifactName: 'acceptance-tests'
+    files: '**/*.Tests.ps1'
+    arguments: '-TagFilter Azure -Output Detailed'
+    environment:
+      RESOURCE_GROUP: 'my-test-resource-group'
+```
+
+With `azureSubscription`, the existing Azure CLI task runs
+`Invoke-TestRunner.ps1`, which calls the Pester adapter **in the same PowerShell
+process**. Tests inherit the task's environment and Azure CLI configuration and
+can call authenticated `az` commands without another login. This does **not**
+establish an Az PowerShell `Connect-AzAccount` session. Optional Key Vault retrieval
+and before/after hooks retain their existing behavior; hooks are separate
+pipeline steps, not shared PowerShell sessions.
 
 #### With Custom Environment Variables and Test Arguments
 

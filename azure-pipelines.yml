@@ -347,8 +347,9 @@ stages:
                 
                 Write-Host "Created test file: $($testFile.FullName)"
                 
-                # Test the script with valid parameters
-                # Using 'pwsh -Command exit 0' as test runner which always succeeds
+                # Use a script runner with the executor's file-first calling convention.
+                $mockRunner = Join-Path $testDir.FullName "MockRunner.ps1"
+                Set-Content -LiteralPath $mockRunner -Value 'param($TestFile, [Parameter(ValueFromRemainingArguments)] $RunnerArguments); exit 0'
                 $resultsDir = Join-Path $tempDir "test-results"
                 New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
                 
@@ -357,8 +358,8 @@ stages:
                       -SearchPath $testDir.FullName `
                       -FilePattern "*Tests.dll" `
                       -ResultsDirectory $resultsDir `
-                      -TestRunnerCommand "pwsh" `
-                      -TestResultsArguments '-Command "exit 0"'
+                      -TestRunnerCommand $mockRunner `
+                      -TestResultsArguments '--report-trx --results-directory'
                     
                     $exitCode = $LASTEXITCODE
                     if ($null -eq $exitCode) { $exitCode = 0 }
@@ -378,6 +379,91 @@ stages:
                 Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
                 Remove-Item -Path $resultsDir -Recurse -Force -ErrorAction SilentlyContinue
               pwsh: true
+
+  - stage: TestPesterAcceptance
+    displayName: 'Test Pester acceptance runtime'
+    dependsOn: Setup
+    jobs:
+      - job: RunPesterAcceptance
+        displayName: 'Run Pester template and runtime regressions'
+        strategy:
+          matrix:
+            LatestStable:
+              pesterRequestedVersion: 'latest'
+            Pester5:
+              pesterRequestedVersion: '5.7.1'
+        steps:
+          - template: pipelines/lib/use-template-files.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
+
+          - pwsh: |
+              $artifact = "$(Pipeline.Workspace)/pester-tests"
+              $null = New-Item -ItemType Directory -Path "$artifact/nested directory" -Force
+              Copy-Item "$(almguruTemplateFilesPath)/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/Context.Tests.ps1"
+              Copy-Item "$(almguruTemplateFilesPath)/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/nested directory/Context.Tests.ps1"
+            displayName: 'Stage Pester test scripts'
+
+          - template: pipelines/lib/run-acceptance-tests.yml
+            parameters:
+              environmentName: 'TemplateTests'
+              runtimeType: 'pester'
+              runtimeVersion: '$(pesterRequestedVersion)'
+              artifactName: 'pester-tests'
+              files: '**/*.Tests.ps1'
+              suiteName: 'Pester $(pesterRequestedVersion)'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow -FullNameFilter "Acceptance runtime.*" -Output Detailed'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              afterTestsSteps:
+                - pwsh: |
+                    $reports = @(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)" -Filter '*.pester.xml')
+                    if ($reports.Count -ne 2) { throw "Expected two separate reports; got $($reports.Count)." }
+                    foreach ($report in $reports) {
+                        [xml]$xml = Get-Content -LiteralPath $report.FullName -Raw
+                        if ($xml.DocumentElement.LocalName -ne 'test-results') { throw 'Expected NUnit XML.' }
+                        if ($xml.SelectNodes('//test-case[@result="Success"]').Count -ne 2) {
+                            throw 'Expected two passing Smoke tests in each report.'
+                        }
+                    }
+                    Write-Host "##vso[task.setvariable variable=previousPesterResultsDirectory]$(runtimeResultsDirectory)"
+                  displayName: 'Verify isolated NUnit reports and filtering'
+
+          - template: pipelines/lib/run-acceptance-tests.yml
+            parameters:
+              environmentName: 'TemplateTests'
+              runtimeType: 'pester'
+              runtimeVersion: '$(pesterRequestedVersion)'
+              artifactName: 'pester-tests'
+              files: 'Context.Tests.ps1'
+              suiteName: 'Second isolated Pester suite'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              beforeTestsSteps:
+                - pwsh: |
+                    if ("$(runtimeResultsDirectory)" -eq "$(previousPesterResultsDirectory)") {
+                        throw 'Sequential template calls must have separate result directories.'
+                    }
+                    if (@(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)").Count -ne 0) {
+                        throw 'The second suite must start with an empty result directory.'
+                    }
+                  displayName: 'Verify fresh results directory for second suite'
+              afterTestsSteps:
+                - pwsh: |
+                    $current = @(Get-ChildItem -LiteralPath "$(runtimeResultsDirectory)" -Filter '*.pester.xml')
+                    $previous = @(Get-ChildItem -LiteralPath "$(previousPesterResultsDirectory)" -Filter '*.pester.xml')
+                    if ($current.Count -ne 1 -or $previous.Count -ne 2) {
+                        throw 'Sequential suite reports were mixed or overwritten.'
+                    }
+                  displayName: 'Verify sequential suite report isolation'
+
+          - pwsh: |
+              & "$(almguruTemplateFilesPath)/scripts/tests/Invoke-PesterRuntimeTests.ps1" -PesterVersion "$(runtimePesterVersion)"
+            displayName: 'Verify executor, Pester options, context, and version selection'
 
   # Integration test: Verify all templates are accessible
   - stage: VerifyTemplateAccessibility
@@ -476,6 +562,16 @@ stages:
               runtimeType: 'none'
               suiteName: 'Compile-time validation'
 
+          - template: pipelines/lib/run-acceptance-tests.yml
+            parameters:
+              azureSubscription: 'public-templates'
+              environmentName: 'CompileValidation'
+              runtimeType: 'pester'
+              files: '**/*.Tests.ps1'
+              arguments: '-TagFilter Smoke -FullNameFilter "Acceptance runtime.*"'
+              environment:
+                PESTER_CONTEXT_VALUE: 'compile validation'
+
   # Summary stage
   - stage: TestSummary
     displayName: 'Test Summary'
@@ -485,9 +581,11 @@ stages:
       - TestDocker
       - TestBuildDotNet
       - TestScripts
+      - TestPesterAcceptance
       - VerifyTemplateAccessibility
     variables:
       GitVersion_MajorMinorPatch: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_MajorMinorPatch'] ]
+      pesterStageResult: $[ dependencies.TestPesterAcceptance.result ]
     condition: always()
     jobs:
       - job: Summary
@@ -507,6 +605,7 @@ stages:
                 $dockerResult = $env:STAGEDEPENDENCIES_TESTDOCKER_VERIFYTEMPLATESTRUCTURE_RESULT
                 $buildDotNetResult = $env:STAGEDEPENDENCIES_TESTBUILDDOTNET_RUNBUILDTEMPLATE_RESULT
                 $scriptsResult = $env:STAGEDEPENDENCIES_TESTSCRIPTS_TESTINVOKETESTRUNNER_RESULT
+                $pesterResult = $env:PESTER_STAGE_RESULT
                 $accessibilityResult = $env:STAGEDEPENDENCIES_VERIFYTEMPLATEACCESSIBILITY_LISTTEMPLATES_RESULT
                 
                 # Set to Unknown if empty
@@ -515,6 +614,7 @@ stages:
                 if ([string]::IsNullOrEmpty($dockerResult)) { $dockerResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($buildDotNetResult)) { $buildDotNetResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($scriptsResult)) { $scriptsResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($pesterResult)) { $pesterResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($accessibilityResult)) { $accessibilityResult = "Unknown" }
                 
                 Write-Host "Stage Results:"
@@ -523,6 +623,7 @@ stages:
                 Write-Host "  TestDocker: $dockerResult"
                 Write-Host "  TestBuildDotNet: $buildDotNetResult"
                 Write-Host "  TestScripts: $scriptsResult"
+                Write-Host "  TestPesterAcceptance: $pesterResult"
                 Write-Host "  VerifyTemplateAccessibility: $accessibilityResult"
                 
                 # Function to get status emoji
@@ -565,6 +666,7 @@ stages:
                 | build-dotnet.yml Template Tests | $(Get-StatusEmoji $buildDotNetResult) | $buildDotNetResult |
                 | docker.yml Template Tests | $(Get-StatusEmoji $dockerResult) | $dockerResult |
                 | PowerShell Scripts Tests | $(Get-StatusEmoji $scriptsResult) | $scriptsResult |
+                | Pester Acceptance Tests | $(Get-StatusEmoji $pesterResult) | $pesterResult |
                 | Template Accessibility | $(Get-StatusEmoji $accessibilityResult) | $accessibilityResult |
                 
                 ---
@@ -613,6 +715,15 @@ stages:
                 - Empty test directory handling
                 
                 **Status:** $scriptsResult
+
+                ### Pester Acceptance Tests
+                **Test Coverage:**
+                - Actual template execution with latest stable Pester and an exact Pester 5 override
+                - Root/nested test scripts, isolated NUnit reports, and environment injection
+                - Filters, quoted arguments, failures, version selection, and in-process context
+                - Authenticated Azure CLI path compile validation (live authentication tested by consuming pipelines)
+
+                **Status:** $pesterResult
                 
                 ### ✅ Template Accessibility
                 **Test Coverage:**
@@ -643,7 +754,7 @@ stages:
                 
                 The following templates require Azure service connections and are tested in consuming pipelines:
                 - **bicep-deploy.yml** - Requires Azure subscription for Bicep deployments
-                - **run-acceptance-tests.yml** - Requires Azure Key Vault and test environments
+                - **run-acceptance-tests.yml authenticated execution** - Requires an Azure service connection; Pester execution without Azure is tested here
                 
                 ---
                 
@@ -670,8 +781,11 @@ stages:
                 Write-Host "  - use-template-files.yml: $useTemplateFilesResult"
                 Write-Host "  - docker.yml: $dockerResult"
                 Write-Host "  - PowerShell scripts: $scriptsResult"
+                Write-Host "  - Pester acceptance tests: $pesterResult"
                 Write-Host "  - Template accessibility: $accessibilityResult"
               pwsh: true
+            env:
+              PESTER_STAGE_RESULT: $(pesterStageResult)
 
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Test Report'
@@ -708,9 +822,10 @@ stages:
                 Write-Host "  ✓ docker.yml - Parameter validation"
                 Write-Host "  ✓ build-dotnet.yml - Sample build and test"
                 Write-Host "  ✓ PowerShell scripts - Invoke-TestRunner.ps1"
+                Write-Host "  ✓ Pester acceptance tests - Latest stable and exact-version override"
                 Write-Host ""
-                Write-Host "Note: bicep-deploy.yml and run-acceptance-tests.yml require Azure"
-                Write-Host "      service connections and are tested in consuming pipelines."
+                Write-Host "Note: Bicep deployments and authenticated acceptance tests require"
+                Write-Host "      Azure service connections and are tested in consuming pipelines."
                 Write-Host ""
                 Write-Host "📊 Detailed report available in Extensions tab and TestReports artifact"
               pwsh: true
@@ -724,6 +839,7 @@ stages:
       - TestDocker
       - TestBuildDotNet
       - TestScripts
+      - TestPesterAcceptance
       - VerifyTemplateAccessibility
       - TestSummary
     variables:
