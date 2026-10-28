@@ -317,7 +317,7 @@ stages:
             parameters:
               buildSpec: 'src/Sample.slnx'
               testSpec: 'bin/**/*.Tests.dll'
-              versionSpec: '10.x'
+              versionSpec: '11.x'
               zipAfterPublish: false
               buildConfiguration: 'Release'
               buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'

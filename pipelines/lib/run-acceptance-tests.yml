@@ -22,7 +22,7 @@
 #   parameters:
 #     environmentName: 'Development'
 #     runtimeType: 'dotnet'
-#     runtimeVersion: '9.x'
+#     runtimeVersion: '11.x'
 #     suiteName: 'API Tests'
 #     files: '**/*AcceptanceTests.dll'
 #
@@ -103,10 +103,10 @@ parameters:
       - 'none'
       - 'dotnet'
 
-  # .NET version to use for running tests (e.g., '8.x', '9.x')
+  # .NET version to use for running tests (e.g., '10.x', '11.x')
   - name: runtimeVersion
     type: string
-    default: ''
+    default: '11.x'
 
   # Name of the pipeline artifact containing test assemblies
   - name: artifactName
@@ -141,7 +141,7 @@ parameters:
 
       - name: 'dotnet'
         runCmd: 'dotnet'
-        version: '9.x'
+        version: '11.x'
         resultsFormatName: 'VSTest'
         resultsFilePattern: '**/*.trx'
         resultsArguments: '--report-trx --results-directory'

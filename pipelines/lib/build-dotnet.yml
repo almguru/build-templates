@@ -120,7 +120,7 @@ parameters:
   # .NET SDK version to install
   - name: versionSpec
     type: string
-    default: '10.x'
+    default: '11.x'
 
   # NuGet tool version to install
   - name: nuGetVersionSpec
