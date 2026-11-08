@@ -218,6 +218,36 @@ stages:
               repositoryResourceName: 'self'
               repositoryLocalPath: 'template-test'
 
+          - pwsh: |
+              $expectedPath = Join-Path $env:PIPELINE_WORKSPACE 'template-test'
+              if ($env:ALMGURU_TEMPLATE_FILES_PATH -ne $expectedPath) {
+                  throw "Unexpected template path: $env:ALMGURU_TEMPLATE_FILES_PATH"
+              }
+              Set-Content -LiteralPath (Join-Path $expectedPath 'checkout-sentinel.txt') -Value 'preserve me'
+            displayName: 'Verify first checkout and create sentinel'
+            env:
+              ALMGURU_TEMPLATE_FILES_PATH: $(almguruTemplateFilesPath)
+
+          - template: pipelines/lib/use-template-files.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 'template-test'
+
+          - pwsh: |
+              $expectedPath = Join-Path $env:PIPELINE_WORKSPACE 'template-test'
+              if ($env:ALMGURU_TEMPLATE_FILES_PATH -ne $expectedPath) {
+                  throw 'Repeated setup changed the template path.'
+              }
+              $sentinel = Join-Path $expectedPath 'checkout-sentinel.txt'
+              if (-not (Test-Path -LiteralPath $sentinel) -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve me') {
+                  throw 'Repeated checkout removed or changed the sentinel.'
+              }
+              Remove-Item -LiteralPath $sentinel
+              & (Join-Path $expectedPath 'scripts/tests/Invoke-TemplateFilesTests.ps1')
+            displayName: 'Verify repeated setup and helper regressions'
+            env:
+              ALMGURU_TEMPLATE_FILES_PATH: $(almguruTemplateFilesPath)
+
           - script: |
               echo "Verifying almguruTemplateFilesPath variable was set"
               if [ -z "$(almguruTemplateFilesPath)" ]; then
@@ -423,20 +453,20 @@ stages:
             Pester5:
               pesterRequestedVersion: '5.7.1'
         steps:
-          - template: pipelines/lib/use-template-files.yml
-            parameters:
-              repositoryResourceName: 'self'
-              repositoryLocalPath: 's'
+          - checkout: self
+            path: 's'
 
           - pwsh: |
               $artifact = "$(Pipeline.Workspace)/pester-tests"
               $null = New-Item -ItemType Directory -Path "$artifact/nested directory" -Force
-              Copy-Item "$(almguruTemplateFilesPath)/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/Context.Tests.ps1"
-              Copy-Item "$(almguruTemplateFilesPath)/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/nested directory/Context.Tests.ps1"
+              Copy-Item "$(Pipeline.Workspace)/s/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/Context.Tests.ps1"
+              Copy-Item "$(Pipeline.Workspace)/s/src/Pester.Acceptance.Tests/Context.Tests.ps1" "$artifact/nested directory/Context.Tests.ps1"
             displayName: 'Stage Pester test scripts'
 
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
               environmentName: 'TemplateTests'
               runtimeType: 'pester'
               runtimeVersion: '$(pesterRequestedVersion)'
@@ -463,6 +493,8 @@ stages:
 
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
               environmentName: 'TemplateTests'
               runtimeType: 'pester'
               runtimeVersion: '$(pesterRequestedVersion)'
@@ -540,6 +572,19 @@ stages:
                 Write-Host "##[section]All templates verified successfully"
               pwsh: true
 
+      - job: NativeBicepCompileTimeValidation
+        displayName: 'Compile-time native Bicep validation (never runs)'
+        condition: eq(1, 0)
+        steps:
+          - template: pipelines/lib/bicep-deploy.yml
+            parameters:
+              azureSubscription: 'public-templates'
+              useLegacyOverrideParameters: false
+              overrideParameters: '{}'
+              deploymentScope: 'Subscription'
+              location: 'eastus'
+              file: 'infra/compile-validation.bicep'
+
       # Compile-time validation: references all templates but never executes.
       - job: CompileTimeTemplateValidation
         displayName: 'Compile-time validation (never runs)'
@@ -590,6 +635,8 @@ stages:
 
           - template: pipelines/lib/bicep-deploy.yml
             parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 'template-compile-validation'
               azureSubscription: 'public-templates'
               deploymentScope: 'Subscription'
               location: 'eastus'
@@ -609,6 +656,8 @@ stages:
 
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 'template-compile-validation'
               azureSubscription: 'public-templates'
               environmentName: 'CompileValidation'
               runtimeType: 'none'
@@ -618,6 +667,8 @@ stages:
               # Omitted selector exercises the public default for each runtime.
               - template: pipelines/lib/run-acceptance-tests.yml
                 parameters:
+                  repositoryResourceName: 'self'
+                  repositoryLocalPath: 'template-compile-validation'
                   azureSubscription: 'public-templates'
                   environmentName: 'CompileValidation'
                   runtimeType: ${{ runtime }}
@@ -625,6 +676,8 @@ stages:
               - ${{ each tool in split('auto,cli,powershell', ',') }}:
                   - template: pipelines/lib/run-acceptance-tests.yml
                     parameters:
+                      repositoryResourceName: 'self'
+                      repositoryLocalPath: 'template-compile-validation'
                       azureSubscription: 'public-templates'
                       azureTool: ${{ tool }}
                       azurePowerShellVersion: '14.4.0'
