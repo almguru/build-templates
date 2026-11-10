@@ -79,6 +79,7 @@ stages:
   - job: DeployInfrastructure
     steps:
     - checkout: self
+      path: s
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
         azureSubscription: 'my-azure-connection'

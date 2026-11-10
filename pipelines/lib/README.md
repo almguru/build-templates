@@ -421,6 +421,7 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 ```yaml
 # Check out the source containing infrastructure/main.bicep.
 - checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -447,6 +448,7 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 
 ```yaml
 - checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -461,6 +463,7 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 
 ```yaml
 - checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -475,6 +478,7 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 
 ```yaml
 - checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -500,6 +504,7 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 
 ```yaml
 - checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -851,7 +856,8 @@ conditions do not bypass repository-resource authorization or declaration checks
 An explicit checkout step, including one nested in these templates, replaces
 Azure's implicit `checkout: self`. Add `checkout: self` when your job needs its
 own source files. Multi-repository checkout can also change the default source
-directory; use explicit checkout paths when a stable source location is required.
+directory; use `path: s` on the self checkout to keep source files at
+`$(Pipeline.Workspace)/s` when tasks use paths relative to that working directory.
 
 ### Usage Example
 
@@ -932,6 +938,7 @@ stages:
     displayName: 'Deploy Infrastructure'
     steps:
     - checkout: self
+      path: s
 
     # Deploy infrastructure using Bicep
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
@@ -1003,6 +1010,7 @@ stages:
   - job: Deploy
     steps:
     - checkout: self
+      path: s
 
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
@@ -1036,6 +1044,7 @@ stages:
   - job: Deploy
     steps:
     - checkout: self
+      path: s
 
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:

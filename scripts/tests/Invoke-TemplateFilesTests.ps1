@@ -20,6 +20,32 @@ $inline = [regex]::Match($helper, '(?ms)^  - pwsh: \|\r?\n(?<body>.*?)^    displ
 if (-not $inline.Success) { throw 'Cannot find the helper path-publication script.' }
 $publishPath = [scriptblock]::Create(($inline.Groups['body'].Value -replace '(?m)^      ', ''))
 
+function Assert-RejectedWithoutPublication {
+    param([scriptblock]$Script)
+
+    $caught = $false
+    $output = [System.Collections.Generic.List[string]]::new()
+    try { & $Script 6>&1 | ForEach-Object { $output.Add("$_") } }
+    catch { $caught = $true }
+    if (-not $caught) { throw 'Expected invalid path to fail.' }
+    if (@($output | Where-Object { $_.Contains('##vso[task.setvariable') }).Count -ne 0) {
+        throw 'Invalid paths must not publish the readiness variable.'
+    }
+}
+
+$detectedPublication = $false
+try {
+    Assert-RejectedWithoutPublication {
+        Write-Host '##vso[task.setvariable variable=almguruTemplateFilesPath]invalid'
+        throw 'Simulated validation failure after publication.'
+    }
+}
+catch {
+    if ($_.Exception.Message -ne 'Invalid paths must not publish the readiness variable.') { throw }
+    $detectedPublication = $true
+}
+if (-not $detectedPublication) { throw 'The assertion must detect publication before an exception.' }
+
 foreach ($name in @('bicep-deploy', 'run-acceptance-tests')) {
     $template = Get-Content -LiteralPath (Join-Path $repositoryRoot "pipelines/lib/$name.yml") -Raw
     if ($template.Contains('Fail if template files are not configured')) {
@@ -57,14 +83,7 @@ try {
     }
     foreach ($invalidPath in @('', '../outside', 'nested/../outside', '/absolute', 'C:\absolute', '\\server\share')) {
         $env:ALMGURU_TEMPLATE_REPOSITORY_PATH = $invalidPath
-        $caught = $false
-        $output = @()
-        try { $output = @(& $publishPath 6>&1) }
-        catch { $caught = $true }
-        if (-not $caught) { throw "Expected invalid path '$invalidPath' to fail." }
-        if (@($output | Where-Object { "$_" -like '*##vso[task.setvariable*' }).Count -ne 0) {
-            throw 'Invalid paths must not publish the readiness variable.'
-        }
+        Assert-RejectedWithoutPublication $publishPath
     }
     Write-Host 'Template-file guards, path publication, validation, and dependent wiring passed.'
 }
