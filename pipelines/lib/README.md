@@ -328,6 +328,8 @@ Template for deploying Azure Bicep templates across different scopes (Subscripti
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `azureSubscription` | string | Required | Azure service connection name |
+| `repositoryResourceName` | string | `'almguru-templates'` | Repository resource for automatic legacy helper setup; use `self` when the helpers are in the pipeline repository |
+| `repositoryLocalPath` | string | `''` | Helper checkout path relative to `$(Pipeline.Workspace)`; falls back to `repositoryResourceName` |
 | `type` | string | `""` | Optional passthrough to `BicepDeploy@0` `type` input. When empty, task default is used |
 | `operation` | string | `""` | Optional passthrough to `BicepDeploy@0` `operation` input. When empty, task default is used |
 | `deploymentScope` | string | `'Subscription'` | Deployment scope (`Subscription`, `ResourceGroup`, `ManagementGroup`, `Tenant`) |
@@ -366,7 +368,7 @@ Template for deploying Azure Bicep templates across different scopes (Subscripti
 - **Variable Naming:** Follows structured naming convention: `{deploymentOutputs}.{outputName}.name` and `{deploymentOutputs}.{outputName}.value`
 - **Error Handling:** Comprehensive error handling and validation
 
-> **Note:** `use-template-files.yml` is required when you need helper scripts (legacy `key=value` conversion and legacy output alias generation). With `useLegacyOverrideParameters: false`, deployment itself can run without template checkout and native `bicepDeploy.*` outputs remain available.
+> **Note:** Legacy mode automatically includes `use-template-files.yml`; no separate setup call is required. With `useLegacyOverrideParameters: false`, deployment remains checkout-free and native `bicepDeploy.*` outputs remain available. Legacy output aliases in native mode require an optional explicit helper call. See [checkout requirements](#use-template-files-template) for repository declarations and consumer source checkout.
 
 For stack-specific input semantics and valid values, refer to the official [`BicepDeploy@0` task documentation](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/bicep-deploy-v0?view=azure-pipelines).
 
@@ -417,8 +419,9 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 #### Resource Group Deployment
 
 ```yaml
-# Required: make template helper scripts available
-- template: pipelines/lib/use-template-files.yml@almguru-templates
+# Check out the source containing infrastructure/main.bicep.
+- checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -444,8 +447,8 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 #### Subscription Scope Deployment
 
 ```yaml
-# Required: make template helper scripts available
-- template: pipelines/lib/use-template-files.yml@almguru-templates
+- checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -459,8 +462,8 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 #### Management Group Scope Deployment
 
 ```yaml
-# Required: make template helper scripts available
-- template: pipelines/lib/use-template-files.yml@almguru-templates
+- checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -474,8 +477,8 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 #### Deployment Stack Create/Update (Resource Group Scope)
 
 ```yaml
-# Required: make template helper scripts available
-- template: pipelines/lib/use-template-files.yml@almguru-templates
+- checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -500,8 +503,8 @@ For full task syntax and options, see the official [`BicepDeploy@0` task documen
 #### Deployment Stack Delete (Resource Group Scope)
 
 ```yaml
-# Required: make template helper scripts available
-- template: pipelines/lib/use-template-files.yml@almguru-templates
+- checkout: self
+  path: s
 
 - template: pipelines/lib/bicep-deploy.yml@almguru-templates
   parameters:
@@ -573,6 +576,8 @@ For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersio
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `azureSubscription` | string | `''` | Azure Resource Manager service connection for test authentication and Key Vault |
+| `repositoryResourceName` | string | `'almguru-templates'` | Repository resource for automatic helper setup; use `self` when the helpers are in the pipeline repository |
+| `repositoryLocalPath` | string | `''` | Helper checkout path relative to `$(Pipeline.Workspace)`; falls back to `repositoryResourceName` |
 | `azureTool` | string | `'auto'` | `auto`: PowerShell for Pester, CLI otherwise; explicit `cli` or `powershell` overrides |
 | `azurePowerShellVersion` | string | `'latest'` | Latest installed or exact Az version when the selected tool is PowerShell |
 | `environmentName` | string | Required | Target environment name (e.g., Development, Staging, Production) |
@@ -596,15 +601,13 @@ For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersio
 - **Custom Hooks:** Before/after test step hooks for setup/teardown
 - **Test Result Publishing:** Automatic TRX (.NET) or NUnit XML (Pester) publishing
 - **Environment Variables:** Support for custom environment configuration
-- **Template Files Integration:** Works with `use-template-files.yml` template
+- **Automatic Helper Setup:** Includes `use-template-files.yml`; repeated calls reuse the configured path without checking out again. See [checkout requirements](#use-template-files-template).
 
 ### Usage Examples
 
 #### Basic .NET Acceptance Tests
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
     environmentName: 'Development'
@@ -616,8 +619,6 @@ For .NET acceptance tests, the template uses the .NET 10 SDK when `runtimeVersio
 #### With Azure Key Vault Integration
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
     azureSubscription: 'MyAzureConnection'
@@ -648,8 +649,6 @@ Stage or download the test scripts and any supporting modules into
 does not download that artifact automatically.
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 # Download/stage your scripts into $(Pipeline.Workspace)/acceptance-tests first.
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
@@ -714,8 +713,6 @@ in the **same PowerShell process**. Tests can use Az cmdlets without their own
 `Connect-AzAccount` call.
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 # Stage/download scripts into $(Pipeline.Workspace)/acceptance-tests first.
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
@@ -757,8 +754,6 @@ retain their previous authenticated CLI behavior. Azure PowerShell does not
 also run `az login`; each invocation selects only one authenticated tool.
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 # Stage/download scripts into $(Pipeline.Workspace)/acceptance-tests first.
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
@@ -789,8 +784,6 @@ login is attempted. With `runtimeType: none`, no test execution task is emitted.
 #### With Custom Environment Variables and Test Arguments
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
     environmentName: 'Production'
@@ -805,8 +798,6 @@ login is attempted. With `runtimeType: none`, no test execution task is emitted.
 #### With Custom Setup/Teardown Steps
 
 ```yaml
-- template: pipelines/lib/use-template-files.yml@almguru-templates
-
 - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
   parameters:
     environmentName: 'Testing'
@@ -833,20 +824,58 @@ Template for checking out template repository files to make scripts and resource
 | `repositoryResourceName` | string | `'almguru-templates'` | Repository resource name to checkout |
 | `repositoryLocalPath` | string | `''` (falls back to `repositoryResourceName`) | Local path for checked out files |
 
+An empty `repositoryLocalPath` means "use `repositoryResourceName`", not an
+empty checkout directory. With both defaults, files are checked out to
+`$(Pipeline.Workspace)/almguru-templates`. Setting `repositoryResourceName: 'my-templates'`
+without overriding the path uses `$(Pipeline.Workspace)/my-templates`;
+setting `repositoryLocalPath: 'build-templates'` instead uses
+`$(Pipeline.Workspace)/build-templates`. The dependent templates forward these
+parameters to this helper and use the same fallback.
+
 ### Features
 
-- **Repository Checkout:** Downloads all template resource files
+- **Conditional Repository Checkout:** Downloads template resource files only when `almguruTemplateFilesPath` is empty
 - **Variable Setup:** Sets `almguruTemplateFilesPath` variable for other templates
 - **Resource Management:** Ensures template dependencies are available
+- **Per-Job Reuse:** Later calls skip checkout and path setup, preserving the first configured path and generated files
+
+Acceptance tests and legacy-mode Bicep deployments call this helper automatically.
+An explicit call is only needed to use helper scripts earlier or configure a custom
+path before dependent templates run. The first successful call wins: later arguments
+do not replace `almguruTemplateFilesPath`. Do not predefine that variable unless it
+points to helper files already available in the current job. Each new job needs its
+own setup; files left on a self-hosted agent are not a readiness signal.
+
+The `almguru-templates` repository resource must still be declared (see
+[Required Repository Setup](#required-repository-setup)). If using another alias or `self`, pass
+`repositoryResourceName` and, when needed, `repositoryLocalPath` to each dependent
+template. Use consistent alias/path arguments across calls: all checkout steps
+participate in Azure's workspace planning even when skipped at runtime. Runtime
+conditions do not bypass repository-resource authorization or declaration checks.
+
+An explicit checkout step, including one nested in these templates, replaces
+Azure's implicit `checkout: self`. Add `checkout: self` when your job needs its
+own source files. Multi-repository checkout can also change the default source
+directory; use `path: s` on the self checkout to keep source files at
+`$(Pipeline.Workspace)/s` when tasks use paths relative to that working directory.
 
 ### Usage Example
 
 ```yaml
-# Must be called once per job before templates that require template files
+# Optional early setup; dependent templates otherwise do this automatically.
 - template: pipelines/lib/use-template-files.yml@almguru-templates
   parameters:
     repositoryResourceName: 'almguru-templates'
     repositoryLocalPath: 'build-templates'
+
+# Match alias/path arguments so all expanded checkout steps agree.
+- template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
+  parameters:
+    repositoryResourceName: 'almguru-templates'
+    repositoryLocalPath: 'build-templates'
+    environmentName: 'Development'
+    runtimeType: 'dotnet'
+    files: '**/*AcceptanceTests.dll'
 ```
 
 ## Complete Pipeline Examples
@@ -893,8 +922,6 @@ stages:
   - job: AcceptanceTests
     displayName: 'Run Acceptance Tests'
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
-
     - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
       parameters:
         environmentName: 'Testing'
@@ -910,7 +937,8 @@ stages:
   - job: DeployInfrastructure
     displayName: 'Deploy Infrastructure'
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
+    - checkout: self
+      path: s
 
     # Deploy infrastructure using Bicep
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
@@ -981,7 +1009,8 @@ stages:
   jobs:
   - job: Deploy
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
+    - checkout: self
+      path: s
 
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
@@ -997,8 +1026,6 @@ stages:
   jobs:
   - job: AcceptanceTests
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
-
     - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
       parameters:
         azureSubscription: 'azure-dev-connection'
@@ -1016,7 +1043,8 @@ stages:
   jobs:
   - job: Deploy
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
+    - checkout: self
+      path: s
 
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
@@ -1032,8 +1060,6 @@ stages:
   jobs:
   - job: SmokeTests
     steps:
-    - template: pipelines/lib/use-template-files.yml@almguru-templates
-
     - template: pipelines/lib/run-acceptance-tests.yml@almguru-templates
       parameters:
         azureSubscription: 'azure-prod-connection'

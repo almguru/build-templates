@@ -3,7 +3,7 @@
 #
 # Downloads all resource template files from repository.
 #
-# This template ensures that all necessary files are available for the pipeline and checked out from the source control.
+# Checks out resources once per job. Later calls preserve an already configured path.
 #
 parameters:
   # The name of the repository resource to be checked out. Use `self` for the current repository.
@@ -11,6 +11,8 @@ parameters:
     type: string
     default: 'almguru-templates'
 
+  # Checkout path relative to Pipeline.Workspace, e.g., 'build-templates'.
+  # Empty uses repositoryResourceName, so defaults resolve to Pipeline.Workspace/almguru-templates.
   - name: repositoryLocalPath
     type: string
     default: ''
@@ -18,6 +20,7 @@ parameters:
 steps:
   - checkout: ${{ parameters.repositoryResourceName }}
     path: ${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}
+    condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
     displayName: 'Checkout template resources'
 
   - pwsh: |
@@ -61,5 +64,6 @@ steps:
 
       Set-SafePipelineVariable -Name 'almguruTemplateFilesPath' -Value $fullTemplateFilesPath
     displayName: 'Set template resources path variable'
+    condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
     env:
       ALMGURU_TEMPLATE_REPOSITORY_PATH: ${{ coalesce(parameters.repositoryLocalPath, parameters.repositoryResourceName) }}

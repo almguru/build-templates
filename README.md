@@ -40,13 +40,13 @@ These templates are designed to be reusable across multiple projects and provide
 | `bicep-deploy.yml` | Deploy Azure Bicep templates | [View Details](pipelines/lib/README.md#bicep-deploy-template) |
 | `docker.yml` | Build and push Docker images | [View Details](pipelines/lib/README.md#docker-build-template) |
 | `run-acceptance-tests.yml` | Run acceptance tests | [View Details](pipelines/lib/README.md#run-acceptance-tests-template) |
-| `use-template-files.yml` | Checkout template repository | [View Details](pipelines/lib/README.md#use-template-files-template) |
+| `use-template-files.yml` | Checkout template repository once per job; included automatically by dependent templates | [View Details](pipelines/lib/README.md#use-template-files-template) |
 
 ## Quick Start
 
 ### 1. Required Repository Setup
 
-**⚠️ REQUIRED:** All templates require the repository to be referenced as `almguru-templates`. Add this to your pipeline's resources section:
+**⚠️ REQUIRED:** Declare the template repository resource. Examples and automatic helper checkout use the `almguru-templates` alias by default:
 
 ```yaml
 resources:
@@ -78,6 +78,8 @@ stages:
   jobs:
   - job: DeployInfrastructure
     steps:
+    - checkout: self
+      path: s
     - template: pipelines/lib/bicep-deploy.yml@almguru-templates
       parameters:
         azureSubscription: 'my-azure-connection'
@@ -85,6 +87,12 @@ stages:
         resourceGroupName: 'my-resource-group'
         file: 'infrastructure/main.bicep'
 ```
+
+Acceptance tests and legacy-mode Bicep deployments automatically check out helper
+files once per job. A separate `use-template-files.yml` call is optional. Include
+`checkout: self` when you need your own source files, as in the example above.
+For alternate aliases, custom paths, and checkout-free native Bicep mode, see
+[template checkout requirements](pipelines/lib/README.md#use-template-files-template).
 
 ## Documentation
 

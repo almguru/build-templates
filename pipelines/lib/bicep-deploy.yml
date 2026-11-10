@@ -60,6 +60,17 @@
 #
 
 parameters:
+# Repository resource for helper scripts, e.g., 'self' when testing this repository.
+- name: repositoryResourceName
+  type: string
+  default: 'almguru-templates'
+
+# Helper checkout path relative to Pipeline.Workspace, e.g., 'build-templates'.
+# Empty uses repositoryResourceName, so defaults resolve to Pipeline.Workspace/almguru-templates.
+- name: repositoryLocalPath
+  type: string
+  default: ''
+
 # Name of the Azure RM service connection to use for the deployment
 - name: azureSubscription
   type: string
@@ -190,13 +201,11 @@ parameters:
 
 steps:
 - ${{ if parameters.useLegacyOverrideParameters }}:
-  - pwsh: |
-      Write-Host "##vso[task.logissue type=error]Template resource files are not configured. Make sure to call ``use-template-files.yml`` first."
-      exit 1
-    condition: and(succeeded(), eq(variables.almguruTemplateFilesPath, ''))
-    displayName: "Fail if template files are not configured"
+  - template: use-template-files.yml
+    parameters:
+      repositoryResourceName: ${{ parameters.repositoryResourceName }}
+      repositoryLocalPath: ${{ parameters.repositoryLocalPath }}
 
-- ${{ if parameters.useLegacyOverrideParameters }}:
   - pwsh: |
       $ErrorActionPreference = "Stop"
       $parametersJson = & "$(almguruTemplateFilesPath)/scripts/ConvertTo-BicepDeploymentParametersJson.ps1" `
