@@ -12,6 +12,7 @@ parameters:
     default: 'almguru-templates'
 
   # Checkout path relative to Pipeline.Workspace, e.g., 'build-templates'.
+  # Empty uses repositoryResourceName, so defaults resolve to Pipeline.Workspace/almguru-templates.
   - name: repositoryLocalPath
     type: string
     default: ''

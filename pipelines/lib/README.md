@@ -819,6 +819,14 @@ Template for checking out template repository files to make scripts and resource
 | `repositoryResourceName` | string | `'almguru-templates'` | Repository resource name to checkout |
 | `repositoryLocalPath` | string | `''` (falls back to `repositoryResourceName`) | Local path for checked out files |
 
+An empty `repositoryLocalPath` means "use `repositoryResourceName`", not an
+empty checkout directory. With both defaults, files are checked out to
+`$(Pipeline.Workspace)/almguru-templates`. Setting `repositoryResourceName: 'my-templates'`
+without overriding the path uses `$(Pipeline.Workspace)/my-templates`;
+setting `repositoryLocalPath: 'build-templates'` instead uses
+`$(Pipeline.Workspace)/build-templates`. The dependent templates forward these
+parameters to this helper and use the same fallback.
+
 ### Features
 
 - **Conditional Repository Checkout:** Downloads template resource files only when `almguruTemplateFilesPath` is empty
