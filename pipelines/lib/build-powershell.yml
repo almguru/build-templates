@@ -1,0 +1,163 @@
+# Build, lint, test, and package PowerShell scripts and modules.
+#
+# PowerShell is interpreted rather than compiled. This template validates the source,
+# runs PSScriptAnalyzer and Pester, then publishes the selected source as an artifact.
+# Pester execution uses the shared run-pester-tests.yml template, which is also used
+# by run-acceptance-tests.yml.
+#
+# Example:
+# - template: pipelines/lib/build-powershell.yml@almguru-templates
+#   parameters:
+#     buildSpec: 'src/MyModule'
+#     testFiles: 'tests/**/*.Tests.ps1'
+
+parameters:
+  # Repository alias containing the shared Pester runner scripts.
+  - name: templateRepositoryResourceName
+    type: string
+    default: 'almguru-templates'
+
+  # Optional checkout path for the repository containing the shared Pester runner scripts.
+  - name: templateRepositoryLocalPath
+    type: string
+    default: ''
+
+  # Path, relative to $(Build.SourcesDirectory), to a PowerShell script or module directory.
+  - name: buildSpec
+    type: string
+    default: ''
+
+  # Pester test-file glob relative to $(Build.SourcesDirectory).
+  - name: testFiles
+    type: string
+    default: '**/*.Tests.ps1'
+
+  # Pester version: latest stable or an exact stable version, 5 or newer.
+  - name: pesterVersion
+    type: string
+    default: 'latest'
+
+  # Additional supported Pester options.
+  - name: unitTestArguments
+    type: string
+    default: ''
+
+  # Name of the published PowerShell artifact.
+  - name: artifactName
+    type: string
+    default: 'PowerShell'
+
+  # Custom steps to execute before source validation and linting.
+  - name: beforeBuildSteps
+    type: stepList
+    default: []
+
+  # Custom steps to execute before Pester unit tests.
+  - name: beforeTestsSteps
+    type: stepList
+    default: []
+
+  # Environment variables passed to Pester tests.
+  - name: environment
+    type: object
+    default: {}
+
+steps:
+  - ${{ parameters.beforeBuildSteps }}
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+
+      if ([string]::IsNullOrWhiteSpace($env:ALMGURU_BUILD_SPEC)) {
+          throw 'buildSpec is required.'
+      }
+
+      $sourceDirectory = [System.IO.Path]::GetFullPath($env:BUILD_SOURCESDIRECTORY)
+      if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+          throw "Source directory not found: $sourceDirectory"
+      }
+
+      $buildPath = [System.IO.Path]::GetFullPath((Join-Path $sourceDirectory $env:ALMGURU_BUILD_SPEC))
+      $buildRelativePath = [System.IO.Path]::GetRelativePath($sourceDirectory, $buildPath)
+      if ($buildRelativePath -eq '..' -or $buildRelativePath -match '^\.\.[\\/]') {
+          throw 'buildSpec must be located within Build.SourcesDirectory.'
+      }
+      if (-not (Test-Path -LiteralPath $buildPath)) {
+          throw "PowerShell build path not found: $buildPath"
+      }
+
+      $sourceFiles = if (Test-Path -LiteralPath $buildPath -PathType Leaf) {
+          @(Get-Item -LiteralPath $buildPath)
+      }
+      else {
+          @(Get-ChildItem -LiteralPath $buildPath -Recurse -File | Where-Object {
+              $_.Extension -in @('.ps1', '.psm1', '.psd1')
+          })
+      }
+      if ($sourceFiles.Count -eq 0 -or @($sourceFiles | Where-Object {
+          $_.Extension -in @('.ps1', '.psm1', '.psd1')
+      }).Count -eq 0) {
+          throw "No PowerShell source files were found in '$buildPath'."
+      }
+
+      Install-Module -Name PSScriptAnalyzer -Repository PSGallery -Scope CurrentUser `
+          -Force -Confirm:$false -ErrorAction Stop
+      Import-Module PSScriptAnalyzer -Force -ErrorAction Stop
+      $findings = @(Invoke-ScriptAnalyzer -Path $buildPath -Recurse -Severity @('Error', 'Warning'))
+      if ($findings.Count -gt 0) {
+          $findings | Format-Table -AutoSize | Out-String | Write-Host
+          throw "PSScriptAnalyzer reported $($findings.Count) error(s) or warning(s)."
+      }
+      Write-Host 'PSScriptAnalyzer found no errors or warnings.'
+
+      $moduleName = if (Test-Path -LiteralPath $buildPath -PathType Container) {
+          Split-Path -Path $buildPath -Leaf
+      }
+      else {
+          [System.IO.Path]::GetFileNameWithoutExtension($buildPath)
+      }
+      $manifestPath = Join-Path (Split-Path -Path $buildPath -Parent) "$moduleName.psd1"
+      if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+          Test-ModuleManifest -Path $manifestPath -ErrorAction Stop | Out-Null
+          Write-Host "Validated module manifest: $manifestPath"
+      }
+    displayName: 'Validate and lint PowerShell source'
+    env:
+      ALMGURU_BUILD_SPEC: ${{ parameters.buildSpec }}
+
+  - template: run-pester-tests.yml
+    parameters:
+      repositoryResourceName: ${{ parameters.templateRepositoryResourceName }}
+      repositoryLocalPath: ${{ parameters.templateRepositoryLocalPath }}
+      searchPath: '$(Build.SourcesDirectory)'
+      files: ${{ parameters.testFiles }}
+      pesterVersion: ${{ parameters.pesterVersion }}
+      testRunTitle: 'PowerShell unit tests'
+      arguments: ${{ parameters.unitTestArguments }}
+      beforeTestsSteps: ${{ parameters.beforeTestsSteps }}
+      environment: ${{ parameters.environment }}
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      $sourceDirectory = [System.IO.Path]::GetFullPath($env:BUILD_SOURCESDIRECTORY)
+      $buildPath = [System.IO.Path]::GetFullPath((Join-Path $sourceDirectory $env:ALMGURU_BUILD_SPEC))
+      $artifactPath = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell'
+      $null = New-Item -ItemType Directory -Path $artifactPath -Force
+
+      if (Test-Path -LiteralPath $buildPath -PathType Leaf) {
+          Copy-Item -LiteralPath $buildPath -Destination $artifactPath -Force
+      }
+      else {
+          Get-ChildItem -LiteralPath $buildPath -Force | Copy-Item -Destination $artifactPath -Recurse -Force
+      }
+      Write-Host "Staged PowerShell output in $artifactPath"
+    displayName: 'Stage PowerShell artifact'
+    env:
+      ALMGURU_BUILD_SPEC: ${{ parameters.buildSpec }}
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish PowerShell artifact'
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)/powershell'
+      artifact: '${{ parameters.artifactName }}'
+      publishLocation: 'pipeline'

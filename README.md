@@ -35,11 +35,13 @@ These templates are designed to be reusable across multiple projects and provide
 | Template | Purpose | Documentation |
 |----------|---------|--------------|
 | `build-dotnet.yml` | Build, test, and publish .NET projects | [View Details](pipelines/lib/README.md#build-dotnet-template) |
+| `build-powershell.yml` | Lint, test, and package PowerShell scripts and modules | [View Details](pipelines/lib/README.md#build-powershell-template) |
 | `azure-cli.yml` | Execute Azure CLI commands | [View Details](pipelines/lib/README.md#azure-cli-template) |
 | `azure-powershell.yml` | Execute authenticated Az PowerShell scripts | [View Details](pipelines/lib/README.md#azure-powershell-template) |
 | `bicep-deploy.yml` | Deploy Azure Bicep templates | [View Details](pipelines/lib/README.md#bicep-deploy-template) |
 | `docker.yml` | Build and push Docker images | [View Details](pipelines/lib/README.md#docker-build-template) |
 | `run-acceptance-tests.yml` | Run acceptance tests | [View Details](pipelines/lib/README.md#run-acceptance-tests-template) |
+| `run-pester-tests.yml` | Shared Pester execution for build and acceptance pipelines | [View Details](pipelines/lib/README.md#shared-pester-tests-template) |
 | `use-template-files.yml` | Checkout template repository once per job; included automatically by dependent templates | [View Details](pipelines/lib/README.md#use-template-files-template) |
 
 ## Quick Start
@@ -117,6 +119,7 @@ The pipeline actively tests these templates with real execution:
 - **use-template-files.yml** - Tested with repository checkout operations
 - **docker.yml** - Tested with parameter validation scenarios
 - **PowerShell scripts** - Tested with various input conditions
+- **build-powershell.yml** - PSScriptAnalyzer linting, Pester unit tests through the shared Pester template, and artifact publishing
 - **run-acceptance-tests.yml** - Pester execution with latest stable and exact-version overrides, NUnit publishing, filters, and environment injection
 
 Authenticated acceptance tests default to **Az PowerShell for Pester** and

@@ -1,0 +1,194 @@
+# Shared Pester execution template used by build and acceptance pipelines.
+#
+# The calling template handles any workflow-specific setup (for example, retrieving
+# Key Vault secrets). This template owns Pester installation, test execution, and
+# NUnit result publishing.
+
+parameters:
+  # Repository resource containing shared test runner scripts.
+  - name: repositoryResourceName
+    type: string
+    default: 'almguru-templates'
+
+  # Optional helper repository checkout path relative to $(Pipeline.Workspace).
+  - name: repositoryLocalPath
+    type: string
+    default: ''
+
+  # Directory searched for the Pester test files.
+  - name: searchPath
+    type: string
+    default: '$(Build.SourcesDirectory)'
+
+  # Pester test file glob, relative to searchPath.
+  - name: files
+    type: string
+    default: '**/*.Tests.ps1'
+
+  # Latest stable Pester or an exact stable version, 5 or newer.
+  - name: pesterVersion
+    type: string
+    default: 'latest'
+
+  # Optional results directory; an isolated agent temp directory is created when empty.
+  - name: resultsDirectory
+    type: string
+    default: ''
+
+  # Test run title shown in Azure Pipelines.
+  - name: testRunTitle
+    type: string
+    default: 'Pester tests'
+
+  # Additional supported Pester options.
+  - name: arguments
+    type: string
+    default: ''
+
+  # Optional Azure Resource Manager service connection.
+  - name: azureSubscription
+    type: string
+    default: ''
+
+  # Tool to authenticate when azureSubscription is provided.
+  - name: azureTool
+    type: string
+    default: 'auto'
+    values:
+      - 'auto'
+      - 'cli'
+      - 'powershell'
+
+  # Az PowerShell version for authenticated PowerShell execution.
+  - name: azurePowerShellVersion
+    type: string
+    default: 'latest'
+
+  # Custom steps to execute before Pester runs.
+  - name: beforeTestsSteps
+    type: stepList
+    default: []
+
+  # Custom steps to execute after test results are published.
+  - name: afterTestsSteps
+    type: stepList
+    default: []
+
+  # Environment variables passed to the test process.
+  - name: environment
+    type: object
+    default: {}
+
+steps:
+  - template: use-template-files.yml
+    parameters:
+      repositoryResourceName: ${{ parameters.repositoryResourceName }}
+      repositoryLocalPath: ${{ parameters.repositoryLocalPath }}
+
+  - pwsh: |
+      $resultsDirectory = [string]$env:ALMGURU_PESTER_RESULTS_DIRECTORY
+      if ([string]::IsNullOrWhiteSpace($resultsDirectory)) {
+          $resultsDirectory = Join-Path $env:AGENT_TEMPDIRECTORY "pester-tests-$([guid]::NewGuid())"
+      }
+      if ($resultsDirectory -match '[\r\n]') {
+          throw 'resultsDirectory cannot contain carriage return or newline characters.'
+      }
+      $null = New-Item -ItemType Directory -Path $resultsDirectory -Force
+      $escapedResultsDirectory = $resultsDirectory.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+      Write-Host "##vso[task.setvariable variable=pesterResultsDirectory]$escapedResultsDirectory"
+    displayName: 'Create Pester results directory'
+    env:
+      ALMGURU_PESTER_RESULTS_DIRECTORY: ${{ parameters.resultsDirectory }}
+
+  - ${{ parameters.beforeTestsSteps }}
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      & "$(almguruTemplateFilesPath)/scripts/Install-PesterRuntime.ps1" -Version $env:ALMGURU_PESTER_VERSION
+    displayName: 'Install Pester'
+    env:
+      ALMGURU_PESTER_VERSION: ${{ parameters.pesterVersion }}
+
+  - ${{ if ne(parameters.azureSubscription, '') }}:
+      - ${{ if or(eq(parameters.azureTool, 'powershell'), eq(parameters.azureTool, 'auto')) }}:
+          - template: azure-powershell.yml
+            parameters:
+              serviceConnection: '${{ parameters.azureSubscription }}'
+              azurePowerShellVersion: '${{ parameters.azurePowerShellVersion }}'
+              script:
+                # AzurePowerShell dot-sources file scripts; explicitly forward
+                # the executor exit code from an inline, same-process call.
+                script: |
+                  & "$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1" `
+                  -SearchPath "${{ parameters.searchPath }}" `
+                  -FilePattern "${{ parameters.files }}" `
+                  -ResultsDirectory "$(pesterResultsDirectory)" `
+                  -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS `
+                  -TestRunnerCommand "$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1" `
+                  -TestResultsArguments "$(runtimeResultsArguments)" `
+                  -NoTestsExitCode 11
+                  exit $LASTEXITCODE
+                workingDirectory: '$(almguruTemplateFilesPath)'
+                displayName: 'Run Pester tests'
+              environment:
+                ${{ insert }}: ${{ parameters.environment }}
+                ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
+
+      - ${{ if eq(parameters.azureTool, 'cli') }}:
+          - template: azure-cli.yml
+            parameters:
+              serviceConnection: '${{ parameters.azureSubscription }}'
+              defaultScriptType: 'pscore'
+              script:
+                type: 'pscore'
+                location: 'scriptPath'
+                script: 'scripts/Invoke-TestRunner.ps1'
+                arguments: >-
+                  -SearchPath "${{ parameters.searchPath }}"
+                  -FilePattern "${{ parameters.files }}"
+                  -ResultsDirectory "$(pesterResultsDirectory)"
+                  -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
+                  -TestRunnerCommand "$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1"
+                  -TestResultsArguments "$(runtimeResultsArguments)"
+                  -NoTestsExitCode 11
+                workingDirectory: '$(almguruTemplateFilesPath)'
+                displayName: 'Run Pester tests'
+              environment:
+                ${{ insert }}: ${{ parameters.environment }}
+                ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
+
+  - ${{ if eq(parameters.azureSubscription, '') }}:
+      - task: PowerShell@2
+        displayName: 'Run Pester tests'
+        inputs:
+          targetType: 'filePath'
+          filePath: '$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1'
+          arguments: >-
+            -SearchPath "${{ parameters.searchPath }}"
+            -FilePattern "${{ parameters.files }}"
+            -ResultsDirectory "$(pesterResultsDirectory)"
+            -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS
+            -TestRunnerCommand "$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1"
+            -TestResultsArguments "$(runtimeResultsArguments)"
+            -NoTestsExitCode 11
+          pwsh: true
+          workingDirectory: '$(almguruTemplateFilesPath)'
+        env:
+          ${{ insert }}: ${{ parameters.environment }}
+          ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testRunTitle: '${{ parameters.testRunTitle }}'
+      searchFolder: '$(pesterResultsDirectory)'
+      testResultsFormat: 'NUnit'
+      testResultsFiles: '**/*.pester.xml'
+      mergeTestResults: true
+      failTaskOnMissingResultsFiles: true
+      failTaskOnFailedTests: true
+      failTaskOnFailureToPublishResults: true
+      publishRunAttachments: true
+    displayName: 'Publish Pester test results'
+
+  - ${{ parameters.afterTestsSteps }}

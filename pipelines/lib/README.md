@@ -7,11 +7,13 @@ This directory contains reusable Azure DevOps YAML pipeline templates for common
 | Template | Purpose | Key Features |
 |----------|---------|--------------|
 | [build-dotnet.yml](#build-dotnet-template) | Build, test, and publish .NET projects | Multi-framework support, code signing, test coverage reporting |
+| [build-powershell.yml](#build-powershell-template) | Lint, test, and package PowerShell scripts and modules | PSScriptAnalyzer, shared Pester execution, pipeline artifacts |
 | [azure-cli.yml](#azure-cli-template) | Execute Azure CLI commands | Multi-script support, configurable environments |
 | [azure-powershell.yml](#azure-powershell-template) | Execute Az PowerShell scripts | Service-connection authentication, inline/file scripts, configurable Az versions |
 | [bicep-deploy.yml](#bicep-deploy-template) | Deploy Azure Bicep templates | Multi-scope deployment, automatic output variables |
 | [docker.yml](#docker-build-template) | Build and push Docker images | Multi-image support, configurable registries |
 | [run-acceptance-tests.yml](#run-acceptance-tests-template) | Run acceptance tests | .NET and Pester support, Key Vault integration, custom hooks |
+| [run-pester-tests.yml](#shared-pester-tests-template) | Run Pester suites | Shared Pester install, authenticated execution, NUnit results |
 | [use-template-files.yml](#use-template-files-template) | Checkout template repository | Template resource management |
 
 ## Required Repository Setup
@@ -184,6 +186,70 @@ For projects requiring VSTest runner instead of Microsoft Testing Platform:
     deploymentFolder: 'app'
     nuGetPackagesDeploymentFolder: 'packages'
 ```
+
+## Build PowerShell Template
+
+**Location:** `pipelines/lib/build-powershell.yml`
+
+Validates and lints a PowerShell script or module, runs Pester unit tests, and publishes the selected source as a pipeline artifact. Since PowerShell is interpreted, validation and linting take the place of a compile step. PSScriptAnalyzer errors and warnings fail the build; a module manifest matching the build path is also validated when present.
+
+Pester tests run through `run-pester-tests.yml`, which is also used by the acceptance-test template. Unit and acceptance test suites therefore share runtime installation, authentication-aware execution, filtering, and NUnit result publishing.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `templateRepositoryResourceName` | string | `'almguru-templates'` | Repository alias containing the shared Pester runner scripts; use `self` when those scripts are in the current repository |
+| `templateRepositoryLocalPath` | string | `''` | Optional checkout path for the shared Pester runner scripts; defaults to the resource name |
+| `buildSpec` | string | `''` | Required path, relative to `$(Build.SourcesDirectory)`, to a PowerShell file or directory to lint and publish |
+| `testFiles` | string | `'**/*.Tests.ps1'` | Pester test-file glob relative to `$(Build.SourcesDirectory)` |
+| `pesterVersion` | string | `'latest'` | Latest stable Pester or an exact stable version, 5 or newer |
+| `unitTestArguments` | string | `''` | Supported Pester options forwarded to the shared acceptance-test runner |
+| `artifactName` | string | `'PowerShell'` | Name of the published pipeline artifact |
+| `beforeBuildSteps` | stepList | `[]` | Custom steps before validation and linting |
+| `beforeTestsSteps` | stepList | `[]` | Custom steps before Pester unit tests |
+| `environment` | object | `{}` | Environment variables passed to Pester tests |
+
+The template uses `$(Build.SourcesDirectory)` for source validation and packaging, and the shared Pester runner uses the standard `s` checkout path. `templateRepositoryResourceName` normally uses the documented `almguru-templates` repository alias; set it to `self` when the helper scripts are in the current repository. `templateRepositoryLocalPath` is only needed when the helper repository is checked out at a non-default path. `buildSpec` must identify a script file or a directory containing PowerShell source files. The template copies that file or directory's contents into the `powershell` artifact staging folder and publishes it only after linting and tests succeed.
+
+### Usage Example
+
+```yaml
+- template: pipelines/lib/build-powershell.yml@almguru-templates
+  parameters:
+    buildSpec: 'src/MyModule'
+    testFiles: 'tests/**/*.Tests.ps1'
+    pesterVersion: '5.7.1'
+    artifactName: 'MyPowerShellModule'
+    unitTestArguments: '-TagFilter Unit -Output Detailed'
+```
+
+## Shared Pester Tests Template
+
+**Location:** `pipelines/lib/run-pester-tests.yml`
+
+Shared Pester lifecycle used by `build-powershell.yml` and the Pester runtime in `run-acceptance-tests.yml`. It installs the requested stable Pester version, invokes the common `Invoke-TestRunner.ps1` / `Invoke-PesterRunner.ps1` scripts, routes optional Azure authentication through the selected Azure task, and publishes NUnit test results.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `repositoryResourceName` | string | `'almguru-templates'` | Repository resource containing shared runner scripts |
+| `repositoryLocalPath` | string | `''` | Optional helper repository checkout path |
+| `searchPath` | string | `'$(Build.SourcesDirectory)'` | Directory searched for the test files |
+| `files` | string | `'**/*.Tests.ps1'` | Pester test-file glob relative to `searchPath` |
+| `pesterVersion` | string | `'latest'` | Latest stable Pester or an exact stable version, 5 or newer |
+| `resultsDirectory` | string | `''` | Results directory; empty creates an isolated agent temp directory |
+| `testRunTitle` | string | `'Pester tests'` | Test run title shown in Azure Pipelines |
+| `arguments` | string | `''` | Supported Pester options |
+| `azureSubscription` | string | `''` | Optional Azure Resource Manager service connection |
+| `azureTool` | string | `'auto'` | Authenticated tool: `auto`, `cli`, or `powershell` |
+| `azurePowerShellVersion` | string | `'latest'` | Az PowerShell version for authenticated execution |
+| `beforeTestsSteps` | stepList | `[]` | Custom steps before Pester runs |
+| `afterTestsSteps` | stepList | `[]` | Custom steps after result publishing |
+| `environment` | object | `{}` | Environment variables passed to the test process |
+
+`run-acceptance-tests.yml` performs acceptance-specific setup such as Key Vault retrieval before calling this template. `build-powershell.yml` calls it directly for unit tests.
 
 ## Azure CLI Template
 

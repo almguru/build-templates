@@ -145,18 +145,21 @@ exit $LASTEXITCODE
     Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $root 'wrapper results') -Filter '*.pester.xml').Count -eq 2) 'Task wrapper must run both files.'
     $checks++
 
-    $templatePath = Join-Path $scriptsPath '../pipelines/lib/run-acceptance-tests.yml'
+    $templatePath = Join-Path $scriptsPath '../pipelines/lib/run-pester-tests.yml'
     $template = Get-Content -LiteralPath $templatePath -Raw
-    $inlineMatch = [regex]::Match($template, '(?ms)^                    script: \|\r?\n(?<body>.*?)^                    workingDirectory:')
-    Assert-True $inlineMatch.Success 'Azure PowerShell inline runner script must be present.'
-    $inlineRunner = ($inlineMatch.Groups['body'].Value -replace '(?m)^                      ', '').
+    $inlineMatch = [regex]::Match($template, '(?ms)^[ ]+script:\r?\n(?:[ ]+#[^\r\n]*\r?\n)*[ ]+script: \|\r?\n(?<body>.*?)^[ ]+workingDirectory:')
+    Assert-True $inlineMatch.Success 'Shared Azure PowerShell inline Pester runner script must be present.'
+    $inlineRunner = ($inlineMatch.Groups['body'].Value -replace '(?m)^ {18}', '').
         Replace('$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1', '$ScriptsPath/Invoke-TestRunner.ps1').
-        Replace('$(Pipeline.Workspace)/${{ parameters.artifactName }}', '$FixtureRoot/input').
+        Replace('$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1', '$Command').
+        Replace('${{ parameters.searchPath }}', '$FixtureRoot/input').
         Replace('${{ parameters.files }}', '$Pattern').
-        Replace('$(runtimeResultsDirectory)', '$FixtureRoot/Azure PowerShell results').
-        Replace('$(runtimeRunCmd)', '$Command').
-        Replace('$(runtimeResultsArguments)', '$ReportArguments').
-        Replace('$(runtimeNoTestsExitCode)', '11')
+        Replace('$(pesterResultsDirectory)', '$FixtureRoot/Azure PowerShell results').
+        Replace('$(runtimeResultsArguments)', '$ReportArguments')
+    $acceptanceTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/run-acceptance-tests.yml') -Raw
+    Assert-True ($acceptanceTemplate.Contains('template: run-pester-tests.yml')) 'Acceptance tests must use the shared Pester template.'
+    $buildTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/build-powershell.yml') -Raw
+    Assert-True ($buildTemplate.Contains('template: run-pester-tests.yml')) 'PowerShell builds must use the shared Pester template.'
     $wrapperSetup = @'
 param($ScriptsPath, $FixtureRoot, $Pattern, $Command, $ReportArguments)
 $env:PESTER_EXPECTED_PID = "$PID"
