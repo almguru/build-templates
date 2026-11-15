@@ -415,6 +415,17 @@ stages:
               buildSpec: '.'
               testFiles: '**/*.Tests.ps1'
               pesterVersion: '5.7.1'
+              beforeBuildSteps:
+                - pwsh: |
+                    if ([string]::IsNullOrWhiteSpace($env:ALMGURU_TEMPLATE_FILES_PATH)) {
+                        throw 'Template resources must be initialized before build hooks run.'
+                    }
+                    if (-not (Test-Path -LiteralPath $env:ALMGURU_TEMPLATE_FILES_PATH)) {
+                        throw 'The initialized template resources path does not exist.'
+                    }
+                  env:
+                    ALMGURU_TEMPLATE_FILES_PATH: '$(almguruTemplateFilesPath)'
+                  displayName: 'Verify template resources initialize before build hooks'
               scriptAnalyzerSeverity:
                 - 'Error'
               unitTestArguments: '-ExcludeTagFilter Slow'
@@ -580,7 +591,7 @@ stages:
               repositoryResourceName: 'self'
               repositoryLocalPath: 's'
               searchPath: '$(Pipeline.Workspace)/pester-tests'
-              files: 'Context.Tests.ps1'
+              files: '**/*.Tests.ps1'
               pesterVersion: '$(pesterRequestedVersion)'
               resultsDirectory: 'relative-pester-results'
               testRunTitle: 'Relative results directory'
@@ -592,10 +603,32 @@ stages:
                 - pwsh: |
                     $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE 'relative-pester-results'
                     $reports = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.pester.xml')
-                    if ($reports.Count -ne 1) {
-                        throw "Expected one NUnit report in $resultsDirectory; found $($reports.Count)."
+                    if ($reports.Count -ne 2) {
+                        throw "Expected two NUnit reports in $resultsDirectory; found $($reports.Count)."
                     }
-                  displayName: 'Verify relative results directory'
+                  displayName: 'Verify relative results path and initial reports'
+
+          - template: pipelines/lib/run-pester-tests.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
+              searchPath: '$(Pipeline.Workspace)/pester-tests'
+              files: 'Context.Tests.ps1'
+              pesterVersion: '$(pesterRequestedVersion)'
+              resultsDirectory: 'relative-pester-results'
+              testRunTitle: 'Reused results directory'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              afterTestsSteps:
+                - pwsh: |
+                    $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE 'relative-pester-results'
+                    $reports = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.pester.xml')
+                    if ($reports.Count -ne 1) {
+                        throw "Expected stale NUnit reports to be removed from $resultsDirectory; found $($reports.Count)."
+                    }
+                  displayName: 'Verify reused results directory is clean'
 
           - pwsh: |
               & "$(almguruTemplateFilesPath)/scripts/tests/Invoke-PesterRuntimeTests.ps1" -PesterVersion "$(runtimePesterVersion)"

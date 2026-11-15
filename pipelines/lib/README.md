@@ -232,7 +232,7 @@ steps:
 
 **Location:** `pipelines/lib/run-pester-tests.yml`
 
-Shared Pester lifecycle used by `build-powershell.yml` and the Pester runtime in `run-acceptance-tests.yml`. It installs the requested stable Pester version, invokes the common `Invoke-TestRunner.ps1` / `Invoke-PesterRunner.ps1` scripts, routes optional Azure authentication through the selected Azure task, and publishes NUnit test results.
+Shared Pester lifecycle used by `build-powershell.yml` and the Pester runtime in `run-acceptance-tests.yml`. It installs the requested stable Pester version, invokes the common `Invoke-TestRunner.ps1` / `Invoke-PesterRunner.ps1` scripts, routes optional Azure authentication through the selected Azure task, and publishes NUnit test results. Existing Pester XML reports are removed from the results directory before each run; other contents are preserved.
 
 ### Parameters
 

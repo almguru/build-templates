@@ -73,6 +73,11 @@ parameters:
     default: {}
 
 steps:
+  - template: use-template-files.yml
+    parameters:
+      repositoryResourceName: ${{ parameters.templateRepositoryResourceName }}
+      repositoryLocalPath: ${{ parameters.templateRepositoryLocalPath }}
+
   - ${{ parameters.beforeBuildSteps }}
 
   - pwsh: |
