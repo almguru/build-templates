@@ -4,8 +4,22 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-major:
+        patterns: ["*"]
+        update-types: ["major"]
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "nuget"
     directory: "/src"
     schedule:
       interval: "weekly"
+    groups:
+      nuget-major:
+        patterns: ["*"]
+        update-types: ["major"]
+      nuget-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
