@@ -158,6 +158,7 @@ exit $LASTEXITCODE
         Replace('$(runtimeResultsArguments)', '$ReportArguments')
     $acceptanceTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/run-acceptance-tests.yml') -Raw
     Assert-True ($acceptanceTemplate.Contains('template: run-pester-tests.yml')) 'Acceptance tests must use the shared Pester template.'
+    Assert-True ($acceptanceTemplate -match "(?m)- name: 'pester'\r?\n(?:[ \t]*#[^\r\n]*\r?\n)*[ \t]*runCmd: ''") 'Acceptance Pester setup must not reference the template checkout before the shared runner checks it out.'
     $buildTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/build-powershell.yml') -Raw
     Assert-True ($buildTemplate.Contains('template: run-pester-tests.yml')) 'PowerShell builds must use the shared Pester template.'
     $wrapperSetup = @'

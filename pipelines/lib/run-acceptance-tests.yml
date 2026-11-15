@@ -196,7 +196,8 @@ parameters:
               version: '$(runtimeVersion)'
 
       - name: 'pester'
-        runCmd: '$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1'
+        # The shared Pester template resolves and invokes its own runner after checkout.
+        runCmd: ''
         version: 'latest'
         resultsFormatName: 'NUnit'
         resultsFilePattern: '**/*.pester.xml'

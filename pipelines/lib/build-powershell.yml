@@ -37,6 +37,13 @@ parameters:
     type: string
     default: 'latest'
 
+  # PSScriptAnalyzer severities that fail the build.
+  - name: scriptAnalyzerSeverity
+    type: object
+    default:
+      - 'Error'
+      - 'Warning'
+
   # Additional supported Pester options.
   - name: unitTestArguments
     type: string
@@ -103,27 +110,31 @@ steps:
       Install-Module -Name PSScriptAnalyzer -Repository PSGallery -Scope CurrentUser `
           -Force -Confirm:$false -ErrorAction Stop
       Import-Module PSScriptAnalyzer -Force -ErrorAction Stop
-      $findings = @(Invoke-ScriptAnalyzer -Path $buildPath -Recurse -Severity @('Error', 'Warning'))
+      $severity = @($env:ALMGURU_SCRIPT_ANALYZER_SEVERITY -split ',')
+      $findings = @(Invoke-ScriptAnalyzer -Path $buildPath -Recurse -Severity $severity)
       if ($findings.Count -gt 0) {
           $findings | Format-Table -AutoSize | Out-String | Write-Host
-          throw "PSScriptAnalyzer reported $($findings.Count) error(s) or warning(s)."
+          throw "PSScriptAnalyzer reported $($findings.Count) issue(s) at severities $($severity -join ', ')."
       }
-      Write-Host 'PSScriptAnalyzer found no errors or warnings.'
+      Write-Host "PSScriptAnalyzer found no issues at severities $($severity -join ', ')."
 
-      $moduleName = if (Test-Path -LiteralPath $buildPath -PathType Container) {
-          Split-Path -Path $buildPath -Leaf
+      $manifestPaths = @($sourceFiles | Where-Object {
+          $_.Extension -eq '.psd1' -and $_.BaseName -eq $_.Directory.Name
+      } | ForEach-Object { $_.FullName })
+      if (Test-Path -LiteralPath $buildPath -PathType Leaf) {
+          $manifestPath = Join-Path (Split-Path -Path $buildPath -Parent) "$([System.IO.Path]::GetFileNameWithoutExtension($buildPath)).psd1"
+          if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+              $manifestPaths += $manifestPath
+          }
       }
-      else {
-          [System.IO.Path]::GetFileNameWithoutExtension($buildPath)
-      }
-      $manifestPath = Join-Path (Split-Path -Path $buildPath -Parent) "$moduleName.psd1"
-      if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+      foreach ($manifestPath in $manifestPaths | Select-Object -Unique) {
           Test-ModuleManifest -Path $manifestPath -ErrorAction Stop | Out-Null
           Write-Host "Validated module manifest: $manifestPath"
       }
     displayName: 'Validate and lint PowerShell source'
     env:
       ALMGURU_BUILD_SPEC: ${{ parameters.buildSpec }}
+      ALMGURU_SCRIPT_ANALYZER_SEVERITY: ${{ join(',', parameters.scriptAnalyzerSeverity) }}
 
   - template: run-pester-tests.yml
     parameters:

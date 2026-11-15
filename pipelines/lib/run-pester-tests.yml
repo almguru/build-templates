@@ -119,14 +119,16 @@ steps:
                 # AzurePowerShell dot-sources file scripts; explicitly forward
                 # the executor exit code from an inline, same-process call.
                 script: |
-                  & "$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1" `
-                  -SearchPath "${{ parameters.searchPath }}" `
-                  -FilePattern "${{ parameters.files }}" `
-                  -ResultsDirectory "$(pesterResultsDirectory)" `
-                  -AdditionalArguments $env:ALMGURU_TEST_RUNNER_ARGUMENTS `
-                  -TestRunnerCommand "$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1" `
-                  -TestResultsArguments "$(runtimeResultsArguments)" `
-                  -NoTestsExitCode 11
+                  $testRunnerArguments = @{
+                      SearchPath = "${{ parameters.searchPath }}"
+                      FilePattern = "${{ parameters.files }}"
+                      ResultsDirectory = "$(pesterResultsDirectory)"
+                      AdditionalArguments = $env:ALMGURU_TEST_RUNNER_ARGUMENTS
+                      TestRunnerCommand = "$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1"
+                      TestResultsArguments = "$(runtimeResultsArguments)"
+                      NoTestsExitCode = 11
+                  }
+                  & "$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1" @testRunnerArguments
                   exit $LASTEXITCODE
                 workingDirectory: '$(almguruTemplateFilesPath)'
                 displayName: 'Run Pester tests'

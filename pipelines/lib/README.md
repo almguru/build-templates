@@ -191,7 +191,7 @@ For projects requiring VSTest runner instead of Microsoft Testing Platform:
 
 **Location:** `pipelines/lib/build-powershell.yml`
 
-Validates and lints a PowerShell script or module, runs Pester unit tests, and publishes the selected source as a pipeline artifact. Since PowerShell is interpreted, validation and linting take the place of a compile step. PSScriptAnalyzer errors and warnings fail the build; a module manifest matching the build path is also validated when present.
+Validates and lints a PowerShell script or module, runs Pester unit tests, and publishes the selected source as a pipeline artifact. Since PowerShell is interpreted, validation and linting take the place of a compile step. By default, PSScriptAnalyzer errors and warnings fail the build; callers can select the severities with `scriptAnalyzerSeverity`. Module manifests matching the build path are also validated.
 
 Pester tests run through `run-pester-tests.yml`, which is also used by the acceptance-test template. Unit and acceptance test suites therefore share runtime installation, authentication-aware execution, filtering, and NUnit result publishing.
 
@@ -204,6 +204,7 @@ Pester tests run through `run-pester-tests.yml`, which is also used by the accep
 | `buildSpec` | string | `''` | Required path, relative to `$(Build.SourcesDirectory)`, to a PowerShell file or directory to lint and publish |
 | `testFiles` | string | `'**/*.Tests.ps1'` | Pester test-file glob relative to `$(Build.SourcesDirectory)` |
 | `pesterVersion` | string | `'latest'` | Latest stable Pester or an exact stable version, 5 or newer |
+| `scriptAnalyzerSeverity` | object | `['Error', 'Warning']` | PSScriptAnalyzer severities that fail the build |
 | `unitTestArguments` | string | `''` | Supported Pester options forwarded to the shared acceptance-test runner |
 | `artifactName` | string | `'PowerShell'` | Name of the published pipeline artifact |
 | `beforeBuildSteps` | stepList | `[]` | Custom steps before validation and linting |

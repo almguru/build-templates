@@ -397,7 +397,7 @@ stages:
     dependsOn: Setup
     jobs:
       - job: RunPowerShellBuild
-        displayName: 'Lint, test, and package sample PowerShell module'
+        displayName: 'Lint, test, and package repository PowerShell sources'
         steps:
           - checkout: self
             path: 's'
@@ -406,10 +406,16 @@ stages:
             parameters:
               templateRepositoryResourceName: 'self'
               templateRepositoryLocalPath: 's'
-              buildSpec: 'src/Sample.PowerShell'
-              testFiles: 'src/Sample.PowerShell.Tests/**/*.Tests.ps1'
-              pesterVersion: 'latest'
-              artifactName: 'SamplePowerShell'
+              buildSpec: '.'
+              testFiles: '**/*.Tests.ps1'
+              pesterVersion: '5.7.1'
+              scriptAnalyzerSeverity:
+                - 'Error'
+              unitTestArguments: '-ExcludeTagFilter Slow'
+              artifactName: 'PowerShellRepository'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '5.7.1'
 
   # Test PowerShell scripts used by templates
   - stage: TestScripts
