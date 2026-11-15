@@ -161,6 +161,9 @@ exit $LASTEXITCODE
     Assert-True ($acceptanceTemplate -match "(?m)- name: 'pester'\r?\n(?:[ \t]*#[^\r\n]*\r?\n)*[ \t]*runCmd: ''") 'Acceptance Pester setup must not reference the template checkout before the shared runner checks it out.'
     $buildTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/build-powershell.yml') -Raw
     Assert-True ($buildTemplate.Contains('template: run-pester-tests.yml')) 'PowerShell builds must use the shared Pester template.'
+    Assert-True ($buildTemplate.Contains("testRunTitle: 'Unit Tests (PowerShell)'")) 'PowerShell unit tests must use the technology-qualified run title.'
+    $dotnetTemplate = Get-Content -LiteralPath (Join-Path $scriptsPath '../pipelines/lib/build-dotnet.yml') -Raw
+    Assert-True ([regex]::Matches($dotnetTemplate, "testRunTitle: 'Unit Tests \(\.NET\)'").Count -eq 2) 'Both .NET unit-test execution modes must use the technology-qualified run title.'
     $wrapperSetup = @'
 param($ScriptsPath, $FixtureRoot, $Pattern, $Command, $ReportArguments)
 $env:PESTER_EXPECTED_PID = "$PID"
