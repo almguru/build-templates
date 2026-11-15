@@ -157,7 +157,7 @@ steps:
       searchPath: '$(Build.SourcesDirectory)'
       files: ${{ parameters.testFiles }}
       pesterVersion: ${{ parameters.pesterVersion }}
-      testRunTitle: 'PowerShell unit tests'
+      testRunTitle: 'Unit Tests (PowerShell)'
       arguments: ${{ parameters.unitTestArguments }}
       beforeTestsSteps: ${{ parameters.beforeTestsSteps }}
       environment: ${{ parameters.environment }}

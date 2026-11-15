@@ -314,7 +314,7 @@ steps:
     - task: PublishTestResults@2
       condition: succeededOrFailed()
       inputs:
-        testRunTitle: 'Unit tests (.Net)'
+        testRunTitle: 'Unit Tests (.NET)'
         searchFolder: '$(Agent.TempDirectory)'
         testResultsFormat: 'VSTest'
         testResultsFiles: '**/*.trx'
@@ -343,7 +343,7 @@ steps:
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
           ${{ parameters.unitTestArguments }}
         publishTestResults: true
-        testRunTitle: 'Unit tests (.Net)'
+        testRunTitle: 'Unit Tests (.NET)'
 
   - ${{ if ne(parameters.signFiles, '') }}:
       - task: AzureKeyVault@2
