@@ -196,23 +196,21 @@ parameters:
               version: '$(runtimeVersion)'
 
       - name: 'pester'
-        runCmd: '$(almguruTemplateFilesPath)/scripts/Invoke-PesterRunner.ps1'
+        # The shared Pester template resolves and invokes its own runner after checkout.
+        runCmd: ''
         version: 'latest'
         resultsFormatName: 'NUnit'
         resultsFilePattern: '**/*.pester.xml'
-        # Setup appends the resolved version after installation, before execution.
         resultsArguments: 'NUnitXml'
         noTestsExitCode: 11
-        installSteps:
-          - pwsh: |
-              & "$(almguruTemplateFilesPath)/scripts/Install-PesterRuntime.ps1" -Version "$(runtimeVersion)"
-            displayName: 'Install Pester'
+        installSteps: []
 
 steps:
-  - template: use-template-files.yml
-    parameters:
-      repositoryResourceName: ${{ parameters.repositoryResourceName }}
-      repositoryLocalPath: ${{ parameters.repositoryLocalPath }}
+  - ${{ if ne(parameters.runtimeType, 'pester') }}:
+      - template: use-template-files.yml
+        parameters:
+          repositoryResourceName: ${{ parameters.repositoryResourceName }}
+          repositoryLocalPath: ${{ parameters.repositoryLocalPath }}
 
   - pwsh: |
       $resultsDirectory = Join-Path $env:AGENT_TEMPDIRECTORY "acceptance-tests-$([guid]::NewGuid())"
@@ -247,25 +245,41 @@ steps:
           KeyVaultName: '${{ parameters.keyVaultName }}'
           SecretsFilter: '${{ parameters.keyVaultValuesFilter }}'
 
-  - ${{ parameters.beforeTestsSteps }}
+  - ${{ if ne(parameters.runtimeType, 'pester') }}:
+      - ${{ parameters.beforeTestsSteps }}
 
   - ${{ each tool in parameters.toolsConfiguration }}:
       - ${{ if eq(tool.name, parameters.runtimeType) }}:
           - ${{ each step in tool.installSteps }}:
               - ${{ step }}
 
-  - ${{ if ne(parameters.runtimeType, 'none') }}:
-      # Run acceptance tests using the configured runtime. Test assemblies and results format are determined by the selected runtime and configuration.
-      # The selected Azure task owns authentication; Pester stays in that PowerShell process.
+  - ${{ if eq(parameters.runtimeType, 'pester') }}:
+      - template: run-pester-tests.yml
+        parameters:
+          repositoryResourceName: ${{ parameters.repositoryResourceName }}
+          repositoryLocalPath: ${{ parameters.repositoryLocalPath }}
+          searchPath: '$(Pipeline.Workspace)/${{ parameters.artifactName }}'
+          files: ${{ parameters.files }}
+          pesterVersion: '$(runtimeVersion)'
+          resultsDirectory: '$(runtimeResultsDirectory)'
+          testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
+          arguments: ${{ parameters.arguments }}
+          azureSubscription: ${{ parameters.azureSubscription }}
+          azureTool: ${{ parameters.azureTool }}
+          azurePowerShellVersion: ${{ parameters.azurePowerShellVersion }}
+          beforeTestsSteps: ${{ parameters.beforeTestsSteps }}
+          afterTestsSteps: ${{ parameters.afterTestsSteps }}
+          environment: ${{ parameters.environment }}
+
+  - ${{ if and(ne(parameters.runtimeType, 'none'), ne(parameters.runtimeType, 'pester')) }}:
+      # Run non-Pester acceptance tests using the configured runtime.
       - ${{ if ne(parameters.azureSubscription, '') }}:
-          - ${{ if or(eq(parameters.azureTool, 'powershell'), and(eq(parameters.azureTool, 'auto'), eq(parameters.runtimeType, 'pester'))) }}:
+          - ${{ if eq(parameters.azureTool, 'powershell') }}:
               - template: azure-powershell.yml
                 parameters:
                   serviceConnection: '${{ parameters.azureSubscription }}'
                   azurePowerShellVersion: '${{ parameters.azurePowerShellVersion }}'
                   script:
-                    # AzurePowerShell dot-sources file scripts; explicitly forward
-                    # the executor's exit code from an inline, same-process call.
                     script: |
                       & "$(almguruTemplateFilesPath)/scripts/Invoke-TestRunner.ps1" `
                       -SearchPath "$(Pipeline.Workspace)/${{ parameters.artifactName }}" `
@@ -282,7 +296,7 @@ steps:
                     ${{ insert }}: ${{ parameters.environment }}
                     ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
 
-          - ${{ if or(eq(parameters.azureTool, 'cli'), and(eq(parameters.azureTool, 'auto'), ne(parameters.runtimeType, 'pester'))) }}:
+          - ${{ if or(eq(parameters.azureTool, 'cli'), eq(parameters.azureTool, 'auto')) }}:
               - template: azure-cli.yml
                 parameters:
                   serviceConnection: '${{ parameters.azureSubscription }}'
@@ -325,18 +339,20 @@ steps:
               ${{ insert }}: ${{ parameters.environment }}
               ALMGURU_TEST_RUNNER_ARGUMENTS: ${{ parameters.arguments }}
 
-  - task: PublishTestResults@2
-    condition: succeededOrFailed()
-    inputs:
-      testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
-      searchFolder: '$(runtimeResultsDirectory)'
-      testResultsFormat: '$(runtimeResultsFormatName)'
-      testResultsFiles: '$(runtimeResultsFilePattern)'
-      mergeTestResults: true
-      failTaskOnMissingResultsFiles: true
-      failTaskOnFailedTests: true
-      failTaskOnFailureToPublishResults: true
-      publishRunAttachments: true
-    displayName: 'Publish acceptance tests results (${{ parameters.runtimeType }})'
+  - ${{ if ne(parameters.runtimeType, 'pester') }}:
+      - task: PublishTestResults@2
+        condition: succeededOrFailed()
+        inputs:
+          testRunTitle: "${{ replace(format('Acceptance Tests - [{0}] ({1})', parameters.suiteName, parameters.environmentName), ' []', '') }}"
+          searchFolder: '$(runtimeResultsDirectory)'
+          testResultsFormat: '$(runtimeResultsFormatName)'
+          testResultsFiles: '$(runtimeResultsFilePattern)'
+          mergeTestResults: true
+          failTaskOnMissingResultsFiles: true
+          failTaskOnFailedTests: true
+          failTaskOnFailureToPublishResults: true
+          publishRunAttachments: true
+        displayName: 'Publish acceptance tests results (${{ parameters.runtimeType }})'
 
-  - ${{ parameters.afterTestsSteps }}
+  - ${{ if ne(parameters.runtimeType, 'pester') }}:
+      - ${{ parameters.afterTestsSteps }}

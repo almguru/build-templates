@@ -155,16 +155,25 @@ stages:
               )) {
                   if (-not $content.Contains($element)) { throw "Missing PowerShell mapping: $element" }
               }
-              $runner = Get-Content 'pipelines/lib/run-acceptance-tests.yml' -Raw
+              $acceptanceRunner = Get-Content 'pipelines/lib/run-acceptance-tests.yml' -Raw
               foreach ($element in @(
-                  "default: 'auto'", 'template: azure-powershell.yml', 'template: azure-cli.yml',
-                  "or(eq(parameters.azureTool, 'powershell'), and(eq(parameters.azureTool, 'auto'), eq(parameters.runtimeType, 'pester')))",
-                  "or(eq(parameters.azureTool, 'cli'), and(eq(parameters.azureTool, 'auto'), ne(parameters.runtimeType, 'pester')))",
+                  "default: 'auto'", 'template: run-pester-tests.yml',
+                  'template: azure-powershell.yml', 'template: azure-cli.yml',
+                  "if eq(parameters.azureTool, 'powershell')",
+                  "or(eq(parameters.azureTool, 'cli'), eq(parameters.azureTool, 'auto'))",
                   "if eq(parameters.azureSubscription, '')", 'task: PowerShell@2'
               )) {
-                  if (-not $runner.Contains($element)) { throw "Missing acceptance routing: $element" }
+                  if (-not $acceptanceRunner.Contains($element)) { throw "Missing acceptance routing: $element" }
               }
-              Write-Host 'Azure PowerShell mappings and acceptance routing checks passed.'
+              $pesterRunner = Get-Content 'pipelines/lib/run-pester-tests.yml' -Raw
+              foreach ($element in @(
+                  "or(eq(parameters.azureTool, 'powershell'), eq(parameters.azureTool, 'auto'))",
+                  "if eq(parameters.azureTool, 'cli')",
+                  "if eq(parameters.azureSubscription, '')", 'task: PowerShell@2'
+              )) {
+                  if (-not $pesterRunner.Contains($element)) { throw "Missing shared Pester routing: $element" }
+              }
+              Write-Host 'Azure PowerShell mappings and shared test routing checks passed.'
             displayName: 'Verify Azure PowerShell template and acceptance routing'
 
       - job: TestScriptExecution
@@ -382,6 +391,59 @@ stages:
               buildConfiguration: 'Release'
               buildAdditionalArguments: '--property:ContinuousIntegrationBuild=true'
 
+  # Test build-powershell.yml template
+  - stage: TestBuildPowerShell
+    displayName: 'Test build-powershell.yml Template'
+    dependsOn: Setup
+    jobs:
+      - job: RunPowerShellBuild
+        displayName: 'Lint, test, and package repository PowerShell sources'
+        steps:
+          - checkout: self
+            path: 's'
+
+          - pwsh: |
+              $stagingPath = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell'
+              $null = New-Item -ItemType Directory -Path $stagingPath -Force
+              Set-Content -LiteralPath (Join-Path $stagingPath 'stale.txt') -Value 'must not be published'
+            displayName: 'Seed stale PowerShell staging content'
+
+          - template: pipelines/lib/build-powershell.yml
+            parameters:
+              templateRepositoryResourceName: 'self'
+              templateRepositoryLocalPath: 's'
+              buildSpec: '.'
+              testFiles: '**/*.Tests.ps1'
+              pesterVersion: '5.7.1'
+              beforeBuildSteps:
+                - pwsh: |
+                    if ([string]::IsNullOrWhiteSpace($env:ALMGURU_TEMPLATE_FILES_PATH)) {
+                        throw 'Template resources must be initialized before build hooks run.'
+                    }
+                    if (-not (Test-Path -LiteralPath $env:ALMGURU_TEMPLATE_FILES_PATH)) {
+                        throw 'The initialized template resources path does not exist.'
+                    }
+                  env:
+                    ALMGURU_TEMPLATE_FILES_PATH: '$(almguruTemplateFilesPath)'
+                  displayName: 'Verify template resources initialize before build hooks'
+              scriptAnalyzerSeverity:
+                - 'Error'
+              unitTestArguments: '-ExcludeTagFilter Slow'
+              artifactName: 'PowerShellRepository'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '5.7.1'
+
+          - pwsh: |
+              $staleFile = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell/stale.txt'
+              if (Test-Path -LiteralPath $staleFile) {
+                  throw 'The PowerShell artifact contains stale content from an earlier template invocation.'
+              }
+              if (-not (Test-Path -LiteralPath (Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell/pipelines/lib/build-powershell.yml'))) {
+                  throw 'The PowerShell artifact does not contain the selected repository source.'
+              }
+            displayName: 'Verify clean PowerShell artifact staging'
+
   # Test PowerShell scripts used by templates
   - stage: TestScripts
     displayName: 'Test PowerShell Scripts'
@@ -524,6 +586,50 @@ stages:
                     }
                   displayName: 'Verify sequential suite report isolation'
 
+          - template: pipelines/lib/run-pester-tests.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
+              searchPath: '$(Pipeline.Workspace)/pester-tests'
+              files: '**/*.Tests.ps1'
+              pesterVersion: '$(pesterRequestedVersion)'
+              resultsDirectory: 'relative-pester-results'
+              testRunTitle: 'Relative results directory'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              afterTestsSteps:
+                - pwsh: |
+                    $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE 'relative-pester-results'
+                    $reports = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.pester.xml')
+                    if ($reports.Count -ne 2) {
+                        throw "Expected two NUnit reports in $resultsDirectory; found $($reports.Count)."
+                    }
+                  displayName: 'Verify relative results path and initial reports'
+
+          - template: pipelines/lib/run-pester-tests.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
+              searchPath: '$(Pipeline.Workspace)/pester-tests'
+              files: 'Context.Tests.ps1'
+              pesterVersion: '$(pesterRequestedVersion)'
+              resultsDirectory: 'relative-pester-results'
+              testRunTitle: 'Reused results directory'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              afterTestsSteps:
+                - pwsh: |
+                    $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE 'relative-pester-results'
+                    $reports = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.pester.xml')
+                    if ($reports.Count -ne 1) {
+                        throw "Expected stale NUnit reports to be removed from $resultsDirectory; found $($reports.Count)."
+                    }
+                  displayName: 'Verify reused results directory is clean'
+
           - pwsh: |
               & "$(almguruTemplateFilesPath)/scripts/tests/Invoke-PesterRuntimeTests.ps1" -PesterVersion "$(runtimePesterVersion)"
             displayName: 'Verify executor, Pester options, context, and version selection'
@@ -547,9 +653,11 @@ stages:
                   'pipelines/lib/azure-cli.yml',
                   'pipelines/lib/azure-powershell.yml',
                   'pipelines/lib/build-dotnet.yml',
+                  'pipelines/lib/build-powershell.yml',
                   'pipelines/lib/bicep-deploy.yml',
                   'pipelines/lib/docker.yml',
                   'pipelines/lib/run-acceptance-tests.yml',
+                  'pipelines/lib/run-pester-tests.yml',
                   'pipelines/lib/use-template-files.yml'
                 )
 
@@ -654,6 +762,13 @@ stages:
               testSpec: 'bin/**/*.Tests.dll'
               zipAfterPublish: false
 
+          - template: pipelines/lib/build-powershell.yml
+            parameters:
+              templateRepositoryResourceName: 'self'
+              templateRepositoryLocalPath: 's'
+              buildSpec: 'src/Sample.PowerShell'
+              testFiles: 'src/Sample.PowerShell.Tests/**/*.Tests.ps1'
+
           - template: pipelines/lib/run-acceptance-tests.yml
             parameters:
               repositoryResourceName: 'self'
@@ -696,12 +811,14 @@ stages:
       - TestUseTemplateFiles
       - TestDocker
       - TestBuildDotNet
+      - TestBuildPowerShell
       - TestScripts
       - TestPesterAcceptance
       - VerifyTemplateAccessibility
     variables:
       GitVersion_MajorMinorPatch: $[ stageDependencies.Setup.ComputeVersion.outputs['ExportVersions.GitVersion_MajorMinorPatch'] ]
       pesterStageResult: $[ dependencies.TestPesterAcceptance.result ]
+      powerShellBuildStageResult: $[ dependencies.TestBuildPowerShell.result ]
     condition: always()
     jobs:
       - job: Summary
@@ -722,6 +839,7 @@ stages:
                 $buildDotNetResult = $env:STAGEDEPENDENCIES_TESTBUILDDOTNET_RUNBUILDTEMPLATE_RESULT
                 $scriptsResult = $env:STAGEDEPENDENCIES_TESTSCRIPTS_TESTINVOKETESTRUNNER_RESULT
                 $pesterResult = $env:PESTER_STAGE_RESULT
+                $powerShellBuildResult = $env:POWERSHELL_BUILD_STAGE_RESULT
                 $accessibilityResult = $env:STAGEDEPENDENCIES_VERIFYTEMPLATEACCESSIBILITY_LISTTEMPLATES_RESULT
                 
                 # Set to Unknown if empty
@@ -731,6 +849,7 @@ stages:
                 if ([string]::IsNullOrEmpty($buildDotNetResult)) { $buildDotNetResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($scriptsResult)) { $scriptsResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($pesterResult)) { $pesterResult = "Unknown" }
+                if ([string]::IsNullOrEmpty($powerShellBuildResult)) { $powerShellBuildResult = "Unknown" }
                 if ([string]::IsNullOrEmpty($accessibilityResult)) { $accessibilityResult = "Unknown" }
                 
                 Write-Host "Stage Results:"
@@ -740,6 +859,7 @@ stages:
                 Write-Host "  TestBuildDotNet: $buildDotNetResult"
                 Write-Host "  TestScripts: $scriptsResult"
                 Write-Host "  TestPesterAcceptance: $pesterResult"
+                Write-Host "  TestBuildPowerShell: $powerShellBuildResult"
                 Write-Host "  VerifyTemplateAccessibility: $accessibilityResult"
                 
                 # Function to get status emoji
@@ -783,6 +903,7 @@ stages:
                 | docker.yml Template Tests | $(Get-StatusEmoji $dockerResult) | $dockerResult |
                 | PowerShell Scripts Tests | $(Get-StatusEmoji $scriptsResult) | $scriptsResult |
                 | Pester Acceptance Tests | $(Get-StatusEmoji $pesterResult) | $pesterResult |
+                | build-powershell.yml Template Tests | $(Get-StatusEmoji $powerShellBuildResult) | $powerShellBuildResult |
                 | Template Accessibility | $(Get-StatusEmoji $accessibilityResult) | $accessibilityResult |
                 
                 ---
@@ -850,6 +971,14 @@ stages:
                 - Inline executor preserves in-memory module state and propagates test failures
 
                 **Status:** $pesterResult
+
+                ### build-powershell.yml
+                **Test Coverage:**
+                - PSScriptAnalyzer lint and module manifest validation
+                - Shared Pester execution for PowerShell unit tests
+                - Pipeline artifact staging and publishing
+
+                **Status:** $powerShellBuildResult
                 
                 ### ✅ Template Accessibility
                 **Test Coverage:**
@@ -912,6 +1041,7 @@ stages:
               pwsh: true
             env:
               PESTER_STAGE_RESULT: $(pesterStageResult)
+              POWERSHELL_BUILD_STAGE_RESULT: $(powerShellBuildStageResult)
 
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Test Report'
@@ -950,6 +1080,7 @@ stages:
                 Write-Host "  ✓ build-dotnet.yml - Sample build and test"
                 Write-Host "  ✓ PowerShell scripts - Invoke-TestRunner.ps1"
                 Write-Host "  ✓ Pester acceptance tests - Latest stable and exact-version override"
+                Write-Host "  ✓ build-powershell.yml - Lint, Pester unit tests, and artifact publishing"
                 Write-Host ""
                 Write-Host "Note: Bicep deployments and authenticated acceptance tests require"
                 Write-Host "      Azure service connections and are tested in consuming pipelines."
@@ -965,6 +1096,7 @@ stages:
       - TestUseTemplateFiles
       - TestDocker
       - TestBuildDotNet
+      - TestBuildPowerShell
       - TestScripts
       - TestPesterAcceptance
       - VerifyTemplateAccessibility
