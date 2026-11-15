@@ -30,7 +30,8 @@ parameters:
     type: string
     default: 'latest'
 
-  # Optional results directory; an isolated agent temp directory is created when empty.
+  # Optional results directory; relative paths use Pipeline.Workspace, and empty
+  # creates an isolated agent temp directory.
   - name: resultsDirectory
     type: string
     default: ''
@@ -93,6 +94,10 @@ steps:
       if ($resultsDirectory -match '[\r\n]') {
           throw 'resultsDirectory cannot contain carriage return or newline characters.'
       }
+      if (-not [System.IO.Path]::IsPathRooted($resultsDirectory)) {
+          $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE $resultsDirectory
+      }
+      $resultsDirectory = [System.IO.Path]::GetFullPath($resultsDirectory)
       $null = New-Item -ItemType Directory -Path $resultsDirectory -Force
       $escapedResultsDirectory = $resultsDirectory.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
       Write-Host "##vso[task.setvariable variable=pesterResultsDirectory]$escapedResultsDirectory"

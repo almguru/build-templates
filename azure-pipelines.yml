@@ -402,6 +402,12 @@ stages:
           - checkout: self
             path: 's'
 
+          - pwsh: |
+              $stagingPath = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell'
+              $null = New-Item -ItemType Directory -Path $stagingPath -Force
+              Set-Content -LiteralPath (Join-Path $stagingPath 'stale.txt') -Value 'must not be published'
+            displayName: 'Seed stale PowerShell staging content'
+
           - template: pipelines/lib/build-powershell.yml
             parameters:
               templateRepositoryResourceName: 'self'
@@ -416,6 +422,16 @@ stages:
               environment:
                 PESTER_CONTEXT_VALUE: 'pipeline context'
                 PESTER_CONTEXT_VERSION: '5.7.1'
+
+          - pwsh: |
+              $staleFile = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell/stale.txt'
+              if (Test-Path -LiteralPath $staleFile) {
+                  throw 'The PowerShell artifact contains stale content from an earlier template invocation.'
+              }
+              if (-not (Test-Path -LiteralPath (Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell/pipelines/lib/build-powershell.yml'))) {
+                  throw 'The PowerShell artifact does not contain the selected repository source.'
+              }
+            displayName: 'Verify clean PowerShell artifact staging'
 
   # Test PowerShell scripts used by templates
   - stage: TestScripts
@@ -558,6 +574,28 @@ stages:
                         throw 'Sequential suite reports were mixed or overwritten.'
                     }
                   displayName: 'Verify sequential suite report isolation'
+
+          - template: pipelines/lib/run-pester-tests.yml
+            parameters:
+              repositoryResourceName: 'self'
+              repositoryLocalPath: 's'
+              searchPath: '$(Pipeline.Workspace)/pester-tests'
+              files: 'Context.Tests.ps1'
+              pesterVersion: '$(pesterRequestedVersion)'
+              resultsDirectory: 'relative-pester-results'
+              testRunTitle: 'Relative results directory'
+              arguments: '-TagFilter Smoke -ExcludeTagFilter Slow'
+              environment:
+                PESTER_CONTEXT_VALUE: 'pipeline context'
+                PESTER_CONTEXT_VERSION: '$(runtimePesterVersion)'
+              afterTestsSteps:
+                - pwsh: |
+                    $resultsDirectory = Join-Path $env:PIPELINE_WORKSPACE 'relative-pester-results'
+                    $reports = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.pester.xml')
+                    if ($reports.Count -ne 1) {
+                        throw "Expected one NUnit report in $resultsDirectory; found $($reports.Count)."
+                    }
+                  displayName: 'Verify relative results directory'
 
           - pwsh: |
               & "$(almguruTemplateFilesPath)/scripts/tests/Invoke-PesterRuntimeTests.ps1" -PesterVersion "$(runtimePesterVersion)"

@@ -5,7 +5,7 @@
     Exercises the exported module function through Pester.
 #>
 BeforeAll {
-    $moduleManifest = Join-Path $PSScriptRoot '../Sample.PowerShell/Sample.PowerShell.psd1'
+    $moduleManifest = Join-Path $PSScriptRoot '../Sample.PowerShell/Sample.PowerShell.Manifest.psd1'
     Import-Module -Name $moduleManifest -Force
 }
 

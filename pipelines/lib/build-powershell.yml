@@ -6,10 +6,13 @@
 # by run-acceptance-tests.yml.
 #
 # Example:
-# - template: pipelines/lib/build-powershell.yml@almguru-templates
-#   parameters:
-#     buildSpec: 'src/MyModule'
-#     testFiles: 'tests/**/*.Tests.ps1'
+# steps:
+#   - checkout: self
+#     path: s
+#   - template: pipelines/lib/build-powershell.yml@almguru-templates
+#     parameters:
+#       buildSpec: 'src/MyModule'
+#       testFiles: 'tests/**/*.Tests.ps1'
 
 parameters:
   # Repository alias containing the shared Pester runner scripts.
@@ -118,13 +121,19 @@ steps:
       }
       Write-Host "PSScriptAnalyzer found no issues at severities $($severity -join ', ')."
 
-      $manifestPaths = @($sourceFiles | Where-Object {
-          $_.Extension -eq '.psd1' -and $_.BaseName -eq $_.Directory.Name
+      $manifestCandidates = @($sourceFiles | Where-Object {
+          $_.Extension -eq '.psd1'
       } | ForEach-Object { $_.FullName })
       if (Test-Path -LiteralPath $buildPath -PathType Leaf) {
           $manifestPath = Join-Path (Split-Path -Path $buildPath -Parent) "$([System.IO.Path]::GetFileNameWithoutExtension($buildPath)).psd1"
           if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
-              $manifestPaths += $manifestPath
+              $manifestCandidates += $manifestPath
+          }
+      }
+      $manifestPaths = foreach ($manifestPath in $manifestCandidates | Select-Object -Unique) {
+          $manifestData = Import-PowerShellDataFile -LiteralPath $manifestPath
+          if ($manifestData -is [System.Collections.IDictionary] -and $manifestData.Contains('ModuleVersion')) {
+              $manifestPath
           }
       }
       foreach ($manifestPath in $manifestPaths | Select-Object -Unique) {
@@ -153,7 +162,12 @@ steps:
       $sourceDirectory = [System.IO.Path]::GetFullPath($env:BUILD_SOURCESDIRECTORY)
       $buildPath = [System.IO.Path]::GetFullPath((Join-Path $sourceDirectory $env:ALMGURU_BUILD_SPEC))
       $artifactPath = Join-Path $env:BUILD_ARTIFACTSTAGINGDIRECTORY 'powershell'
-      $null = New-Item -ItemType Directory -Path $artifactPath -Force
+      if (Test-Path -LiteralPath $artifactPath -PathType Container) {
+          Get-ChildItem -LiteralPath $artifactPath -Force | Remove-Item -Recurse -Force
+      }
+      else {
+          $null = New-Item -ItemType Directory -Path $artifactPath -Force
+      }
 
       if (Test-Path -LiteralPath $buildPath -PathType Leaf) {
           Copy-Item -LiteralPath $buildPath -Destination $artifactPath -Force

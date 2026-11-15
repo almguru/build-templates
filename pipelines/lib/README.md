@@ -191,7 +191,7 @@ For projects requiring VSTest runner instead of Microsoft Testing Platform:
 
 **Location:** `pipelines/lib/build-powershell.yml`
 
-Validates and lints a PowerShell script or module, runs Pester unit tests, and publishes the selected source as a pipeline artifact. Since PowerShell is interpreted, validation and linting take the place of a compile step. By default, PSScriptAnalyzer errors and warnings fail the build; callers can select the severities with `scriptAnalyzerSeverity`. Module manifests matching the build path are also validated.
+Validates and lints a PowerShell script or module, runs Pester unit tests, and publishes the selected source as a pipeline artifact. Since PowerShell is interpreted, validation and linting take the place of a compile step. By default, PSScriptAnalyzer errors and warnings fail the build; callers can select the severities with `scriptAnalyzerSeverity`. Module manifests in the build path are identified by their `ModuleVersion` metadata and validated.
 
 Pester tests run through `run-pester-tests.yml`, which is also used by the acceptance-test template. Unit and acceptance test suites therefore share runtime installation, authentication-aware execution, filtering, and NUnit result publishing.
 
@@ -216,13 +216,16 @@ The template uses `$(Build.SourcesDirectory)` for source validation and packagin
 ### Usage Example
 
 ```yaml
-- template: pipelines/lib/build-powershell.yml@almguru-templates
-  parameters:
-    buildSpec: 'src/MyModule'
-    testFiles: 'tests/**/*.Tests.ps1'
-    pesterVersion: '5.7.1'
-    artifactName: 'MyPowerShellModule'
-    unitTestArguments: '-TagFilter Unit -Output Detailed'
+steps:
+  - checkout: self
+    path: s
+  - template: pipelines/lib/build-powershell.yml@almguru-templates
+    parameters:
+      buildSpec: 'src/MyModule'
+      testFiles: 'tests/**/*.Tests.ps1'
+      pesterVersion: '5.7.1'
+      artifactName: 'MyPowerShellModule'
+      unitTestArguments: '-TagFilter Unit -Output Detailed'
 ```
 
 ## Shared Pester Tests Template
@@ -240,7 +243,7 @@ Shared Pester lifecycle used by `build-powershell.yml` and the Pester runtime in
 | `searchPath` | string | `'$(Build.SourcesDirectory)'` | Directory searched for the test files |
 | `files` | string | `'**/*.Tests.ps1'` | Pester test-file glob relative to `searchPath` |
 | `pesterVersion` | string | `'latest'` | Latest stable Pester or an exact stable version, 5 or newer |
-| `resultsDirectory` | string | `''` | Results directory; empty creates an isolated agent temp directory |
+| `resultsDirectory` | string | `''` | Results directory; relative paths resolve from `$(Pipeline.Workspace)`, while empty creates an isolated agent temp directory |
 | `testRunTitle` | string | `'Pester tests'` | Test run title shown in Azure Pipelines |
 | `arguments` | string | `''` | Supported Pester options |
 | `azureSubscription` | string | `''` | Optional Azure Resource Manager service connection |
