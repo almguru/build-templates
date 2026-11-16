@@ -38,9 +38,11 @@ else {
 }
 
 $headers = @{ Authorization = "Bearer $($env:ACCESS_TOKEN)" }
+$projectName = [uri]::EscapeDataString($env:SYSTEM_TEAMPROJECT)
+$repositoryName = [uri]::EscapeDataString($env:BUILD_REPOSITORY_NAME)
 try {
   $enablement = Invoke-RestMethod `
-    -Uri "https://advsec.dev.azure.com/$organizationName/$($env:SYSTEM_TEAMPROJECT)/_apis/management/repositories/$($env:BUILD_REPOSITORY_NAME)/enablement?api-version=7.2-preview.1" `
+    -Uri "https://advsec.dev.azure.com/$organizationName/$projectName/_apis/management/repositories/$repositoryName/enablement?api-version=7.2-preview.1" `
     -Method Get `
     -Headers $headers `
     -ContentType 'application/json' `

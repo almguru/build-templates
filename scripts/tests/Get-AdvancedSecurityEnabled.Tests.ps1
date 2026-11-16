@@ -52,6 +52,16 @@ Describe 'Get-AdvancedSecurityEnabled.ps1' {
     $output[0] | Should -BeFalse
   }
 
+  It 'escapes project and repository names as separate path segments' {
+    $env:SYSTEM_TEAMPROJECT = 'project name'
+    $env:BUILD_REPOSITORY_NAME = 'repo%20name'
+    & $script:enablementScript | Out-Null
+
+    Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter {
+      $Uri -eq 'https://advsec.dev.azure.com/example/project%20name/_apis/management/repositories/repo%2520name/enablement?api-version=7.2-preview.1'
+    }
+  }
+
   It 'returns only Boolean false and skips the API for non-Azure-Repos providers' {
     $env:BUILD_REPOSITORY_PROVIDER = 'GitHub'
     $output = @(& $script:enablementScript)
