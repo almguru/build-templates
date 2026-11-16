@@ -195,6 +195,8 @@ Validates and lints a PowerShell script or module, runs Pester unit tests, and p
 
 Pester tests run through `run-pester-tests.yml`, which is also used by the acceptance-test template. Unit and acceptance test suites therefore share runtime installation, authentication-aware execution, filtering, and NUnit result publishing.
 
+The template also converts PSScriptAnalyzer findings to SARIF and publishes them with `AdvancedSecurity-Publish@1` when GitHub Advanced Security is enabled for the Azure Repos repository. The check is implemented by `scripts/Get-AdvancedSecurityEnabled.ps1`, which returns a Boolean; the template sets the pipeline variable and skips publication for other repository providers or when Advanced Security is disabled. The enablement check uses `$(System.AccessToken)`; allow the pipeline scripts to access the OAuth token. SARIF publication does not change the configured analyzer severities that determine whether the build fails.
+
 ### Parameters
 
 | Parameter | Type | Default | Description |

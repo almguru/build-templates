@@ -82,6 +82,7 @@ steps:
 
   - pwsh: |
       $ErrorActionPreference = 'Stop'
+      Write-Host "##vso[task.setvariable variable=powershellSarifGenerated]false"
 
       if ([string]::IsNullOrWhiteSpace($env:ALMGURU_BUILD_SPEC)) {
           throw 'buildSpec is required.'
@@ -118,8 +119,25 @@ steps:
       Install-Module -Name PSScriptAnalyzer -Repository PSGallery -Scope CurrentUser `
           -Force -Confirm:$false -ErrorAction Stop
       Import-Module PSScriptAnalyzer -Force -ErrorAction Stop
+      Install-Module -Name ConvertToSARIF -RequiredVersion '1.0.0' -Repository PSGallery `
+          -Scope CurrentUser -Force -Confirm:$false -ErrorAction Stop
+      Import-Module ConvertToSARIF -RequiredVersion '1.0.0' -Force -ErrorAction Stop
+
+      $sarifDirectory = Join-Path $env:AGENT_TEMPDIRECTORY 'powershell-sarif'
+      $null = New-Item -ItemType Directory -Path $sarifDirectory -Force
+      $sarifPath = Join-Path $sarifDirectory 'psscriptanalyzer.sarif'
+      if (Test-Path -LiteralPath $sarifPath) {
+          Remove-Item -LiteralPath $sarifPath -Force
+      }
+
       $severity = @($env:ALMGURU_SCRIPT_ANALYZER_SEVERITY -split ',')
       $findings = @(Invoke-ScriptAnalyzer -Path $buildPath -Recurse -Severity $severity)
+      $findings | ConvertTo-SARIF -FilePath $sarifPath
+      if (-not (Test-Path -LiteralPath $sarifPath -PathType Leaf)) {
+          throw "PSScriptAnalyzer did not produce the expected SARIF report: $sarifPath"
+      }
+      Write-Host "##vso[task.setvariable variable=powershellSarifGenerated]true"
+
       if ($findings.Count -gt 0) {
           $findings | Format-Table -AutoSize | Out-String | Write-Host
           throw "PSScriptAnalyzer reported $($findings.Count) issue(s) at severities $($severity -join ', ')."
@@ -161,6 +179,22 @@ steps:
       arguments: ${{ parameters.unitTestArguments }}
       beforeTestsSteps: ${{ parameters.beforeTestsSteps }}
       environment: ${{ parameters.environment }}
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      Write-Host '##vso[task.setvariable variable=advancedSecurityEnabled]false'
+      $enabled = & "$(almguruTemplateFilesPath)/scripts/Get-AdvancedSecurityEnabled.ps1"
+      Write-Host "##vso[task.setvariable variable=advancedSecurityEnabled]$enabled"
+    displayName: 'Check Advanced Security enablement'
+    condition: and(succeededOrFailed(), eq(variables['powershellSarifGenerated'], 'true'))
+    env:
+      ACCESS_TOKEN: $(System.AccessToken)
+
+  - task: AdvancedSecurity-Publish@1
+    displayName: 'Publish PowerShell analysis to Advanced Security'
+    condition: and(succeededOrFailed(), eq(variables['advancedSecurityEnabled'], 'true'), eq(variables['powershellSarifGenerated'], 'true'))
+    inputs:
+      SarifsInputDirectory: '$(Agent.TempDirectory)/powershell-sarif'
 
   - pwsh: |
       $ErrorActionPreference = 'Stop'
