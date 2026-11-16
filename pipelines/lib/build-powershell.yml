@@ -190,7 +190,7 @@ steps:
     env:
       ACCESS_TOKEN: $(System.AccessToken)
 
-  - task: AdvancedSecurity-Publish@1
+  - task: AdvancedSecurity-Publish@1.1.425
     displayName: 'Publish PowerShell analysis to Advanced Security'
     condition: and(succeededOrFailed(), eq(variables['advancedSecurityEnabled'], 'true'), eq(variables['powershellSarifGenerated'], 'true'))
     inputs:
